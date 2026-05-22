@@ -20,7 +20,7 @@ body {
   width: 100%;
   min-height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
 }
 
 .controls {
@@ -47,6 +47,65 @@ body {
   background: #121820;
   color: #e8edf2;
   padding: 0.45rem 0.65rem;
+}
+
+.seekbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
+  background: #1a2129;
+  border-bottom: 1px solid #2f3944;
+}
+
+.seekbar span {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: #8a9baa;
+  min-width: 2.8rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#seekSlider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #2f3944;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+#seekSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e8edf2;
+  cursor: pointer;
+}
+
+#seekSlider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e8edf2;
+  cursor: pointer;
+  border: none;
+}
+
+#seekSlider:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+#seekSlider:disabled::-webkit-slider-thumb {
+  cursor: default;
 }
 
 #vizCanvas {

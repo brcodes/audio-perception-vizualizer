@@ -14,6 +14,11 @@
         <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
         <button id="playPauseBtn" type="button" disabled>Play</button>
       </section>
+      <section class="seekbar">
+        <span id="currentTime">0:00</span>
+        <input id="seekSlider" type="range" min="0" max="100" value="0" step="0.1" disabled aria-label="Seek" />
+        <span id="totalTime">0:00</span>
+      </section>
       <canvas id="vizCanvas" role="img" aria-label="Music Mix Mapper Visualizer">
         Circular visualization of MP3 frequency and stereo pan content.
       </canvas>

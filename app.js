@@ -1,6 +1,9 @@
 const canvas = document.getElementById('vizCanvas');
 const fileInput = document.getElementById('fileInput');
 const playPauseBtn = document.getElementById('playPauseBtn');
+const seekSlider = document.getElementById('seekSlider');
+const currentTimeEl = document.getElementById('currentTime');
+const totalTimeEl = document.getElementById('totalTime');
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
@@ -71,6 +74,15 @@ let analyserRight;
 let leftData;
 let rightData;
 let isDocumentHidden = false;
+let isScrubbing = false;
+let wasPlaying = false;
+
+function formatTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 function ensureAudioGraph() {
   if (audioContext) return;
@@ -304,6 +316,11 @@ fileInput.addEventListener('change', async (event) => {
   drawVisualizer();
   playPauseBtn.disabled = false;
   playPauseBtn.textContent = 'Play';
+  seekSlider.value = 0;
+  seekSlider.max = 100;
+  seekSlider.disabled = true;
+  currentTimeEl.textContent = '0:00';
+  totalTimeEl.textContent = '0:00';
 });
 
 playPauseBtn.addEventListener('click', async () => {
@@ -319,6 +336,40 @@ playPauseBtn.addEventListener('click', async () => {
     audio.pause();
     playPauseBtn.textContent = 'Play';
     stopAnimation();
+  }
+});
+
+audio.addEventListener('loadedmetadata', () => {
+  seekSlider.max = audio.duration;
+  totalTimeEl.textContent = formatTime(audio.duration);
+  seekSlider.disabled = false;
+});
+
+audio.addEventListener('timeupdate', () => {
+  if (isScrubbing) return;
+  seekSlider.value = audio.currentTime;
+  currentTimeEl.textContent = formatTime(audio.currentTime);
+});
+
+seekSlider.addEventListener('pointerdown', () => {
+  isScrubbing = true;
+  wasPlaying = !audio.paused;
+  if (wasPlaying) audio.pause();
+});
+
+seekSlider.addEventListener('input', () => {
+  currentTimeEl.textContent = formatTime(Number(seekSlider.value));
+});
+
+seekSlider.addEventListener('pointerup', async () => {
+  audio.currentTime = Number(seekSlider.value);
+  isScrubbing = false;
+  if (wasPlaying) {
+    ensureAudioGraph();
+    if (audioContext.state === 'suspended') await audioContext.resume();
+    await audio.play();
+    playPauseBtn.textContent = 'Pause';
+    startAnimation();
   }
 });
 

@@ -52,8 +52,13 @@ const FREQUENCIES = Array.from({ length: FREQ_COUNT }, (_, i) => {
   const logT = i / (FREQ_COUNT - 1);
   const hz = 20 * Math.pow(1000, logT);
   const rgb = interpolateColor(logT);
-  // Alpha bell: peaks at mid frequencies (logT≈0.5), lower at extremes
-  const alpha = 0.28 + 0.10 * Math.sin(Math.PI * logT);
+  // Depth in drawing order: 0 = drawn first (back), 1 = drawn last (front).
+  // Bottom half (i<50): drawn 0→49, so front = i=49  → depth = i/49
+  // Top half   (i≥50): drawn 99→50, so front = i=50  → depth = (99-i)/49
+  const depth = i < 50 ? i / 49 : (99 - i) / 49;
+  // Power-curve alpha: back bands stay opaque enough to read, front bands
+  // (yellows at the equator) are kept faint so they don't occlude everything.
+  const alpha = 0.06 + 0.50 * Math.pow(1 - depth, 2.5);
   return { hz, logT, rgb, alpha };
 });
 

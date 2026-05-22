@@ -49,11 +49,11 @@ function computeAlpha(depth) {
   const maxA = Number(maxAlphaSlider.value);
   let t;
   if (e > 0) {
-    t = Math.pow(1 - depth, e);
+    t = 1 - Math.pow(depth, e);      // steep at front
   } else if (e < 0) {
-    t = 1 - Math.pow(depth, -e);
+    t = Math.pow(1 - depth, -e);     // steep at back
   } else {
-    t = 1 - depth;
+    t = 1 - depth;                   // linear
   }
   return minA + (maxA - minA) * t;
 }

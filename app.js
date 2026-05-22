@@ -11,6 +11,8 @@ const GAUSSIAN_SIGMA_DIVISOR = 2.6;
 const WAVEFORM_RESOLUTION = 80;
 const MIN_GEOMETRIC_MEAN_HZ = 34.6;
 const MAX_GEOMETRIC_MEAN_HZ = 10954.5;
+const ZERO_FREQUENCY_DATA = new Uint8Array(1);
+const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 
 const BINS = {
   sub: {
@@ -80,6 +82,9 @@ let analyserLeft;
 let analyserRight;
 let leftData;
 let rightData;
+let isDocumentHidden = false;
+
+const METRICS = new Map(Object.values(BINS).map((bin) => [bin, { energy: 0, panPoint: 0 }]));
 
 function ensureAudioGraph() {
   if (audioContext) return;
@@ -110,17 +115,17 @@ function resizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function hzToIndex(hz, sampleRate, fftSize, maxIndex) {
+function hzToIndex(hz, sampleRate, maxIndex) {
   const nyquist = sampleRate / 2;
   const clampedHz = Math.max(0, Math.min(hz, nyquist));
   const idx = Math.round((clampedHz / nyquist) * maxIndex);
   return Math.max(0, Math.min(maxIndex, idx));
 }
 
-function getBandEnergy(data, minHz, maxHz, sampleRate, fftSize) {
+function getBandEnergy(data, minHz, maxHz, sampleRate) {
   const maxIndex = data.length - 1;
-  const start = hzToIndex(minHz, sampleRate, fftSize, maxIndex);
-  const end = hzToIndex(maxHz, sampleRate, fftSize, maxIndex);
+  const start = hzToIndex(minHz, sampleRate, maxIndex);
+  const end = hzToIndex(maxHz, sampleRate, maxIndex);
   if (end <= start) return 0;
 
   let sumSq = 0;
@@ -238,13 +243,15 @@ function drawVisualizer() {
   ctx.stroke();
 
   const sampleRate = audioContext?.sampleRate || 44100;
-  const fftSize = analyserLeft?.fftSize || 8192;
+  const left = leftData || ZERO_FREQUENCY_DATA;
+  const right = rightData || ZERO_FREQUENCY_DATA;
 
-  const metrics = new Map();
   Object.values(BINS).forEach((bin) => {
-    const l = getBandEnergy(leftData || new Uint8Array(1), bin.minHz, bin.maxHz, sampleRate, fftSize);
-    const r = getBandEnergy(rightData || new Uint8Array(1), bin.minHz, bin.maxHz, sampleRate, fftSize);
-    metrics.set(bin, { energy: (l + r) / 2, panPoint: toPanPoint(l, r) });
+    const l = getBandEnergy(left, bin.minHz, bin.maxHz, sampleRate);
+    const r = getBandEnergy(right, bin.minHz, bin.maxHz, sampleRate);
+    const metric = METRICS.get(bin);
+    metric.energy = (l + r) / 2;
+    metric.panPoint = toPanPoint(l, r);
   });
 
   ctx.save();
@@ -257,7 +264,7 @@ function drawVisualizer() {
   ctx.rect(cx - radius, cy - radius, radius * 2, radius);
   ctx.clip();
   TOP_STACK.forEach((bin) => {
-    const m = metrics.get(bin) || { energy: 0, panPoint: 0 };
+    const m = METRICS.get(bin);
     drawWaveform({
       centerX: cx,
       centerY: cy,
@@ -277,7 +284,7 @@ function drawVisualizer() {
   ctx.rect(cx - radius, cy, radius * 2, radius);
   ctx.clip();
   BOTTOM_STACK.forEach((bin) => {
-    const m = metrics.get(bin) || { energy: 0, panPoint: 0 };
+    const m = METRICS.get(bin);
     drawWaveform({
       centerX: cx,
       centerY: cy,
@@ -303,10 +310,26 @@ function animate() {
   rafId = requestAnimationFrame(animate);
 }
 
+function startAnimation() {
+  if (rafId || audio.paused || isDocumentHidden) return;
+  rafId = requestAnimationFrame(animate);
+}
+
+function stopAnimation() {
+  if (!rafId) return;
+  cancelAnimationFrame(rafId);
+  rafId = undefined;
+}
+
+function isMp3File(file) {
+  const type = (file.type || '').toLowerCase();
+  return MP3_MIME_TYPES.has(type) || file.name.toLowerCase().endsWith('.mp3');
+}
+
 fileInput.addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
-  if (file.type && file.type !== 'audio/mpeg') {
+  if (!isMp3File(file)) {
     window.alert('Please upload an MP3 file.');
     fileInput.value = '';
     return;
@@ -319,6 +342,9 @@ fileInput.addEventListener('change', async (event) => {
   objectUrl = URL.createObjectURL(file);
   audio.src = objectUrl;
   audio.currentTime = 0;
+  audio.pause();
+  stopAnimation();
+  drawVisualizer();
   playPauseBtn.disabled = false;
   playPauseBtn.textContent = 'Play';
 });
@@ -331,14 +357,27 @@ playPauseBtn.addEventListener('click', async () => {
   if (audio.paused) {
     await audio.play();
     playPauseBtn.textContent = 'Pause';
+    startAnimation();
   } else {
     audio.pause();
     playPauseBtn.textContent = 'Play';
+    stopAnimation();
   }
 });
 
 audio.addEventListener('ended', () => {
   playPauseBtn.textContent = 'Play';
+  stopAnimation();
+  drawVisualizer();
+});
+
+document.addEventListener('visibilitychange', () => {
+  isDocumentHidden = document.hidden;
+  if (isDocumentHidden) {
+    stopAnimation();
+    return;
+  }
+  startAnimation();
 });
 
 window.addEventListener('resize', () => {
@@ -348,4 +387,3 @@ window.addEventListener('resize', () => {
 
 resizeCanvas();
 drawVisualizer();
-animate();

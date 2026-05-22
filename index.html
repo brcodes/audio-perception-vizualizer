@@ -14,7 +14,9 @@
         <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
         <button id="playPauseBtn" type="button" disabled>Play</button>
       </section>
-      <canvas id="vizCanvas" aria-label="Music Mix Mapper Visualizer"></canvas>
+      <canvas id="vizCanvas" role="img" aria-label="Music Mix Mapper Visualizer">
+        Circular visualization of MP3 frequency and stereo pan content.
+      </canvas>
     </main>
     <script type="module" src="./app.js"></script>
   </body>

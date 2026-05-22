@@ -387,3 +387,21 @@ window.addEventListener('resize', () => {
 
 resizeCanvas();
 drawVisualizer();
+
+// On load, restore state if the browser retained the file (soft refresh),
+// otherwise clear the stale filename that some browsers display.
+(function restoreFileOnLoad() {
+  const file = fileInput.files?.[0];
+  if (file && isMp3File(file)) {
+    ensureAudioGraph();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    audio.src = objectUrl;
+    audio.currentTime = 0;
+    audio.pause();
+    playPauseBtn.disabled = false;
+    playPauseBtn.textContent = 'Play';
+  } else {
+    fileInput.value = '';
+  }
+}());

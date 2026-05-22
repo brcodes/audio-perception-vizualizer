@@ -3,14 +3,65 @@ const fileInput = document.getElementById('fileInput');
 const playPauseBtn = document.getElementById('playPauseBtn');
 const ctx = canvas.getContext('2d');
 
+const DIVISION_EPSILON = 1e-6;
+const TYPICAL_ENERGY_THRESHOLD = 0.45;
+const TYPICAL_HEIGHT_FACTOR = 0.7;
+const PEAK_HEIGHT_FACTOR = 0.97;
+const GAUSSIAN_SIGMA_DIVISOR = 2.6;
+const WAVEFORM_RESOLUTION = 80;
+const MIN_GEOMETRIC_MEAN_HZ = 34.6;
+const MAX_GEOMETRIC_MEAN_HZ = 10954.5;
+
 const BINS = {
-  sub: { minHz: 20, maxHz: 60, geomHz: 34.6, color: '#580000', alpha: 0.22 },
-  bass: { minHz: 60, maxHz: 250, geomHz: 122.5, color: '#FF2E00', alpha: 0.24 },
-  lowMid: { minHz: 250, maxHz: 500, geomHz: 353.6, color: '#FF8C00', alpha: 0.26 },
-  mid: { minHz: 500, maxHz: 2000, geomHz: 1000, color: '#FFEB00', alpha: 0.3 },
-  upperMid: { minHz: 2000, maxHz: 4000, geomHz: 2828.4, color: '#66CC00', alpha: 0.26 },
-  presence: { minHz: 4000, maxHz: 6000, geomHz: 4898.9, color: '#00CCDD', alpha: 0.24 },
-  brilliance: { minHz: 6000, maxHz: 20000, geomHz: 10954.5, color: '#4B2EFF', alpha: 0.22 }
+  sub: {
+    minHz: 20,
+    maxHz: 60,
+    geometricMeanHz: 34.6,
+    color: '#580000',
+    alpha: 0.22
+  },
+  bass: {
+    minHz: 60,
+    maxHz: 250,
+    geometricMeanHz: 122.5,
+    color: '#FF2E00',
+    alpha: 0.24
+  },
+  lowMid: {
+    minHz: 250,
+    maxHz: 500,
+    geometricMeanHz: 353.6,
+    color: '#FF8C00',
+    alpha: 0.26
+  },
+  mid: {
+    minHz: 500,
+    maxHz: 2000,
+    geometricMeanHz: 1000,
+    color: '#FFEB00',
+    alpha: 0.3
+  },
+  upperMid: {
+    minHz: 2000,
+    maxHz: 4000,
+    geometricMeanHz: 2828.4,
+    color: '#66CC00',
+    alpha: 0.26
+  },
+  presence: {
+    minHz: 4000,
+    maxHz: 6000,
+    geometricMeanHz: 4898.9,
+    color: '#00CCDD',
+    alpha: 0.24
+  },
+  brilliance: {
+    minHz: 6000,
+    maxHz: 20000,
+    geometricMeanHz: 10954.5,
+    color: '#4B2EFF',
+    alpha: 0.22
+  }
 };
 
 const TOP_STACK = [BINS.brilliance, BINS.presence, BINS.upperMid, BINS.mid];
@@ -83,20 +134,27 @@ function getBandEnergy(data, minHz, maxHz, sampleRate, fftSize) {
 }
 
 function toPanPoint(left, right) {
-  const pan = (right - left) / (right + left + 1e-6);
+  const pan = (right - left) / (right + left + DIVISION_EPSILON);
   return Math.max(-100, Math.min(100, Math.round(pan * 100)));
 }
 
 function amplitudeToHeightFactor(energy) {
-  if (energy <= 0.45) return (energy / 0.45) * 0.7;
-  return 0.7 + ((energy - 0.45) / 0.55) * 0.27;
+  if (energy <= TYPICAL_ENERGY_THRESHOLD) {
+    return (energy / TYPICAL_ENERGY_THRESHOLD) * TYPICAL_HEIGHT_FACTOR;
+  }
+
+  const headroomHeight = PEAK_HEIGHT_FACTOR - TYPICAL_HEIGHT_FACTOR;
+  const headroomEnergy = 1 - TYPICAL_ENERGY_THRESHOLD;
+  return (
+    TYPICAL_HEIGHT_FACTOR +
+    ((energy - TYPICAL_ENERGY_THRESHOLD) / headroomEnergy) * headroomHeight
+  );
 }
 
-function frequencyToWidthFactor(geomHz) {
-  const min = BINS.sub.geomHz;
-  const max = BINS.brilliance.geomHz;
+function frequencyToWidthFactor(geometricMeanHz) {
   const logNorm =
-    (Math.log(geomHz) - Math.log(min)) / (Math.log(max) - Math.log(min));
+    (Math.log(geometricMeanHz) - Math.log(MIN_GEOMETRIC_MEAN_HZ)) /
+    (Math.log(MAX_GEOMETRIC_MEAN_HZ) - Math.log(MIN_GEOMETRIC_MEAN_HZ));
   return 0.58 - 0.34 * logNorm;
 }
 
@@ -118,13 +176,16 @@ function drawWaveform({
   color,
   alpha,
   energy,
-  geomHz,
+  geometricMeanHz,
   panPoint
 }) {
-  const heightFactor = Math.max(0, Math.min(0.97, amplitudeToHeightFactor(energy)));
+  const heightFactor = Math.max(
+    0,
+    Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy))
+  );
   const height = radius * heightFactor;
 
-  const widthBase = frequencyToWidthFactor(geomHz);
+  const widthBase = frequencyToWidthFactor(geometricMeanHz);
   const levelBoost = 0.18 * energy;
   let halfWidth = radius * (widthBase + levelBoost);
   const absPan = Math.abs(panPoint) / 100;
@@ -138,15 +199,14 @@ function drawWaveform({
   const actualHalfWidth = Math.max(1, (maxX - minX) / 2);
   const actualCenterX = (minX + maxX) / 2;
 
-  const sigma = actualHalfWidth / 2.6;
+  const sigma = actualHalfWidth / GAUSSIAN_SIGMA_DIVISOR;
   const rgb = hexToRgb(color);
 
   ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
-  const steps = 80;
-  for (let i = 0; i <= steps; i += 1) {
-    const x = minX + ((maxX - minX) * i) / steps;
+  for (let i = 0; i <= WAVEFORM_RESOLUTION; i += 1) {
+    const x = minX + ((maxX - minX) * i) / WAVEFORM_RESOLUTION;
     const dx = x - actualCenterX;
     const gaussian = Math.exp(-(dx * dx) / (2 * sigma * sigma));
     const y = centerY + dir * height * gaussian;
@@ -206,7 +266,7 @@ function drawVisualizer() {
       color: bin.color,
       alpha: bin.alpha,
       energy: m.energy,
-      geomHz: bin.geomHz,
+      geometricMeanHz: bin.geometricMeanHz,
       panPoint: m.panPoint
     });
   });
@@ -226,7 +286,7 @@ function drawVisualizer() {
       color: bin.color,
       alpha: bin.alpha,
       energy: m.energy,
-      geomHz: bin.geomHz,
+      geometricMeanHz: bin.geometricMeanHz,
       panPoint: m.panPoint
     });
   });
@@ -289,4 +349,3 @@ window.addEventListener('resize', () => {
 resizeCanvas();
 drawVisualizer();
 animate();
-

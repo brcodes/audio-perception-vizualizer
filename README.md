@@ -6,11 +6,11 @@ Music Mix Mapper is a static JavaScript web app for MP3-driven 2D circular visua
 
 This project is static and Cloudflare Pages ready.
 
-- Open `/home/runner/work/music-mix-mapper/music-mix-mapper/index.html` directly, or
+- Open `index.html` directly, or
 - Serve the folder (example):
 
 ```bash
-cd /home/runner/work/music-mix-mapper/music-mix-mapper
+cd <project-directory>
 python3 -m http.server 4173
 ```
 

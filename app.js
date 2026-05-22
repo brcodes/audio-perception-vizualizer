@@ -138,6 +138,7 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
 }
 
 function toPanPoint(left, right) {
+  if (left + right < 0.015) return 0;
   const pan = (right - left) / (right + left + DIVISION_EPSILON);
   return Math.max(-100, Math.min(100, Math.round(pan * 100)));
 }

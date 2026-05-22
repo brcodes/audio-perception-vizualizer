@@ -7,67 +7,55 @@ const DIVISION_EPSILON = 1e-6;
 const TYPICAL_ENERGY_THRESHOLD = 0.45;
 const TYPICAL_HEIGHT_FACTOR = 0.7;
 const PEAK_HEIGHT_FACTOR = 0.97;
-const GAUSSIAN_SIGMA_DIVISOR = 2.6;
-const WAVEFORM_RESOLUTION = 80;
-const MIN_GEOMETRIC_MEAN_HZ = 34.6;
-const MAX_GEOMETRIC_MEAN_HZ = 10954.5;
-const ZERO_FREQUENCY_DATA = new Uint8Array(1);
+
+const FREQ_COUNT = 100;
+// Half-bin ratio for constant-Q narrow bands: ±half a log-bin around each center frequency
+const HALF_BIN_RATIO = Math.pow(1000, 0.5 / (FREQ_COUNT - 1));
+
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
+const ZERO_FREQUENCY_DATA = new Uint8Array(1);
 
-const BINS = {
-  sub: {
-    minHz: 20,
-    maxHz: 60,
-    geometricMeanHz: 34.6,
-    color: '#580000',
-    alpha: 0.22
-  },
-  bass: {
-    minHz: 60,
-    maxHz: 250,
-    geometricMeanHz: 122.5,
-    color: '#FF2E00',
-    alpha: 0.24
-  },
-  lowMid: {
-    minHz: 250,
-    maxHz: 500,
-    geometricMeanHz: 353.6,
-    color: '#FF8C00',
-    alpha: 0.26
-  },
-  mid: {
-    minHz: 500,
-    maxHz: 2000,
-    geometricMeanHz: 1000,
-    color: '#FFEB00',
-    alpha: 0.3
-  },
-  upperMid: {
-    minHz: 2000,
-    maxHz: 4000,
-    geometricMeanHz: 2828.4,
-    color: '#66CC00',
-    alpha: 0.26
-  },
-  presence: {
-    minHz: 4000,
-    maxHz: 6000,
-    geometricMeanHz: 4898.9,
-    color: '#00CCDD',
-    alpha: 0.24
-  },
-  brilliance: {
-    minHz: 6000,
-    maxHz: 20000,
-    geometricMeanHz: 10954.5,
-    color: '#4B2EFF',
-    alpha: 0.22
-  }
-};
+// Existing bin colors anchored to their log-frequency positions (logT = 0–1 over 20Hz–20kHz)
+const COLOR_STOPS = [
+  { t: 0,      r: 88,  g: 0,   b: 0   },
+  { t: 0.0794, r: 88,  g: 0,   b: 0   },
+  { t: 0.2624, r: 255, g: 46,  b: 0   },
+  { t: 0.4160, r: 255, g: 140, b: 0   },
+  { t: 0.5663, r: 255, g: 235, b: 0   },
+  { t: 0.7169, r: 102, g: 204, b: 0   },
+  { t: 0.7964, r: 0,   g: 204, b: 221 },
+  { t: 0.9129, r: 75,  g: 46,  b: 255 },
+  { t: 1,      r: 75,  g: 46,  b: 255 },
+];
 
-const TOP_STACK = [BINS.brilliance, BINS.presence, BINS.upperMid, BINS.mid];
-const BOTTOM_STACK = [BINS.sub, BINS.bass, BINS.lowMid, BINS.mid];
+function interpolateColor(t) {
+  let i = 0;
+  while (i < COLOR_STOPS.length - 2 && COLOR_STOPS[i + 1].t <= t) i += 1;
+  const a = COLOR_STOPS[i];
+  const b = COLOR_STOPS[i + 1];
+  const frac = (t - a.t) / (b.t - a.t);
+  return {
+    r: Math.round(a.r + frac * (b.r - a.r)),
+    g: Math.round(a.g + frac * (b.g - a.g)),
+    b: Math.round(a.b + frac * (b.b - a.b)),
+  };
+}
+
+// 100 log-spaced frequencies from 20Hz (logT=0) to 20kHz (logT=1).
+// Geometric midpoint ~632Hz falls at index 49/50 — bottom half shows 20–632Hz, top shows 632–20kHz.
+const FREQUENCIES = Array.from({ length: FREQ_COUNT }, (_, i) => {
+  const logT = i / (FREQ_COUNT - 1);
+  const hz = 20 * Math.pow(1000, logT);
+  const rgb = interpolateColor(logT);
+  // Alpha bell: peaks at mid frequencies (logT≈0.5), lower at extremes
+  const alpha = 0.28 + 0.10 * Math.sin(Math.PI * logT);
+  return { hz, logT, rgb, alpha };
+});
+
+// Bottom semicircle: indices 0–49 (lower 50, 20Hz–~611Hz)
+const BOTTOM_FREQS = FREQUENCIES.slice(0, 50);
+// Top semicircle: indices 50–99 (upper 50, ~655Hz–20kHz)
+const TOP_FREQS = FREQUENCIES.slice(50);
 
 const audio = new Audio();
 audio.crossOrigin = 'anonymous';
@@ -83,8 +71,6 @@ let analyserRight;
 let leftData;
 let rightData;
 let isDocumentHidden = false;
-
-const METRICS = new Map(Object.values(BINS).map((bin) => [bin, { energy: 0, panPoint: 0 }]));
 
 function ensureAudioGraph() {
   if (audioContext) return;
@@ -126,7 +112,8 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
   const maxIndex = data.length - 1;
   const start = hzToIndex(minHz, sampleRate, maxIndex);
   const end = hzToIndex(maxHz, sampleRate, maxIndex);
-  if (end <= start) return 0;
+  // Changed from <= to < so that single-bin bands (common at low frequencies) still return a value
+  if (end < start) return 0;
 
   let sumSq = 0;
   let count = 0;
@@ -147,7 +134,6 @@ function amplitudeToHeightFactor(energy) {
   if (energy <= TYPICAL_ENERGY_THRESHOLD) {
     return (energy / TYPICAL_ENERGY_THRESHOLD) * TYPICAL_HEIGHT_FACTOR;
   }
-
   const headroomHeight = PEAK_HEIGHT_FACTOR - TYPICAL_HEIGHT_FACTOR;
   const headroomEnergy = 1 - TYPICAL_ENERGY_THRESHOLD;
   return (
@@ -156,42 +142,18 @@ function amplitudeToHeightFactor(energy) {
   );
 }
 
-function frequencyToWidthFactor(geometricMeanHz) {
-  const logNorm =
-    (Math.log(geometricMeanHz) - Math.log(MIN_GEOMETRIC_MEAN_HZ)) /
-    (Math.log(MAX_GEOMETRIC_MEAN_HZ) - Math.log(MIN_GEOMETRIC_MEAN_HZ));
-  return 0.58 - 0.34 * logNorm;
+// Psychoacoustic localization spread: low frequencies are harder to localize (wider),
+// high frequencies are tighter. Scaled down for 100 narrow bands.
+function frequencyToWidthFactor(logT) {
+  return 0.08 - 0.04 * logT; // 0.08 at 20Hz → 0.04 at 20kHz
 }
 
-function hexToRgb(hex) {
-  const sanitized = hex.replace('#', '');
-  const value = Number.parseInt(sanitized, 16);
-  return {
-    r: (value >> 16) & 0xff,
-    g: (value >> 8) & 0xff,
-    b: value & 0xff
-  };
-}
-
-function drawWaveform({
-  centerX,
-  centerY,
-  radius,
-  dir,
-  color,
-  alpha,
-  energy,
-  geometricMeanHz,
-  panPoint
-}) {
-  const heightFactor = Math.max(
-    0,
-    Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy))
-  );
+function drawWaveform({ centerX, centerY, radius, dir, rgb, alpha, energy, logT, panPoint }) {
+  const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
   const height = radius * heightFactor;
 
-  const widthBase = frequencyToWidthFactor(geometricMeanHz);
-  const levelBoost = 0.18 * energy;
+  const widthBase = frequencyToWidthFactor(logT);
+  const levelBoost = 0.03 * energy;
   let halfWidth = radius * (widthBase + levelBoost);
   const absPan = Math.abs(panPoint) / 100;
   halfWidth *= 1 + absPan * 0.06;
@@ -201,22 +163,17 @@ function drawWaveform({
   const panX = centerX + (panPoint / 100) * radius;
   const minX = Math.max(leftLimit, panX - halfWidth);
   const maxX = Math.min(rightLimit, panX + halfWidth);
-  const actualHalfWidth = Math.max(1, (maxX - minX) / 2);
   const actualCenterX = (minX + maxX) / 2;
 
-  const sigma = actualHalfWidth / GAUSSIAN_SIGMA_DIVISOR;
-  const rgb = hexToRgb(color);
-
+  // Quadratic bezier: control point at 2× height ensures peak reaches exactly `height`.
+  // For a symmetric bezier B(t) with equal-y endpoints, the midpoint (t=0.5) reaches
+  // 50% of the control point's deviation — so we place it at 2× the desired peak.
+  // This gives a smooth parabolic bell visually indistinguishable from Gaussian for narrow spikes,
+  // with 3 path commands vs the previous 81-point loop.
   ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
-  for (let i = 0; i <= WAVEFORM_RESOLUTION; i += 1) {
-    const x = minX + ((maxX - minX) * i) / WAVEFORM_RESOLUTION;
-    const dx = x - actualCenterX;
-    const gaussian = Math.exp(-(dx * dx) / (2 * sigma * sigma));
-    const y = centerY + dir * height * gaussian;
-    ctx.lineTo(x, y);
-  }
+  ctx.quadraticCurveTo(actualCenterX, centerY + dir * height * 2, maxX, centerY);
   ctx.lineTo(maxX, centerY);
   ctx.closePath();
   ctx.fill();
@@ -246,58 +203,58 @@ function drawVisualizer() {
   const left = leftData || ZERO_FREQUENCY_DATA;
   const right = rightData || ZERO_FREQUENCY_DATA;
 
-  Object.values(BINS).forEach((bin) => {
-    const l = getBandEnergy(left, bin.minHz, bin.maxHz, sampleRate);
-    const r = getBandEnergy(right, bin.minHz, bin.maxHz, sampleRate);
-    const metric = METRICS.get(bin);
-    metric.energy = (l + r) / 2;
-    metric.panPoint = toPanPoint(l, r);
-  });
-
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.clip();
 
+  // Top semicircle: upper 50 frequencies, drawn highest→lowest so that the
+  // boundary frequency (~655Hz, index 50) is painted last and visually prominent at equator.
   ctx.save();
   ctx.beginPath();
   ctx.rect(cx - radius, cy - radius, radius * 2, radius);
   ctx.clip();
-  TOP_STACK.forEach((bin) => {
-    const m = METRICS.get(bin);
+  for (let i = TOP_FREQS.length - 1; i >= 0; i -= 1) {
+    const { hz, logT, rgb, alpha } = TOP_FREQS[i];
+    const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
+    const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     drawWaveform({
       centerX: cx,
       centerY: cy,
       radius,
       dir: -1,
-      color: bin.color,
-      alpha: bin.alpha,
-      energy: m.energy,
-      geometricMeanHz: bin.geometricMeanHz,
-      panPoint: m.panPoint
+      rgb,
+      alpha,
+      energy: (l + r) / 2,
+      logT,
+      panPoint: toPanPoint(l, r),
     });
-  });
+  }
   ctx.restore();
 
+  // Bottom semicircle: lower 50 frequencies, drawn lowest→highest so that the
+  // boundary frequency (~611Hz, index 49) is painted last and visually prominent at equator.
   ctx.save();
   ctx.beginPath();
   ctx.rect(cx - radius, cy, radius * 2, radius);
   ctx.clip();
-  BOTTOM_STACK.forEach((bin) => {
-    const m = METRICS.get(bin);
+  BOTTOM_FREQS.forEach(({ hz, logT, rgb, alpha }) => {
+    const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
+    const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     drawWaveform({
       centerX: cx,
       centerY: cy,
       radius,
       dir: 1,
-      color: bin.color,
-      alpha: bin.alpha,
-      energy: m.energy,
-      geometricMeanHz: bin.geometricMeanHz,
-      panPoint: m.panPoint
+      rgb,
+      alpha,
+      energy: (l + r) / 2,
+      logT,
+      panPoint: toPanPoint(l, r),
     });
   });
   ctx.restore();
+
   ctx.restore();
 }
 
@@ -388,8 +345,6 @@ window.addEventListener('resize', () => {
 resizeCanvas();
 drawVisualizer();
 
-// On load, restore state if the browser retained the file (soft refresh),
-// otherwise clear the stale filename that some browsers display.
 (function restoreFileOnLoad() {
   const file = fileInput.files?.[0];
   if (file && isMp3File(file)) {

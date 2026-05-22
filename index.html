@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Mix Mapper</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="controls">
+        <h1>Music Mix Mapper</h1>
+        <label for="fileInput">Upload MP3</label>
+        <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
+        <button id="playPauseBtn" type="button" disabled>Play</button>
+      </section>
+      <canvas id="vizCanvas" aria-label="Music Mix Mapper Visualizer"></canvas>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

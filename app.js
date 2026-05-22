@@ -12,10 +12,10 @@ const minAlphaSlider = document.getElementById('minAlphaSlider');
 const minAlphaValueEl = document.getElementById('minAlphaValue');
 const maxAlphaSlider = document.getElementById('maxAlphaSlider');
 const maxAlphaValueEl = document.getElementById('maxAlphaValue');
-const bassSmoothingSlider = document.getElementById('bassSmoothingSlider');
-const bassSmoothingValueEl = document.getElementById('bassSmoothingValue');
-const trebleSmoothingSlider = document.getElementById('trebleSmoothingSlider');
-const trebleSmoothingValueEl = document.getElementById('trebleSmoothingValue');
+const bassCurveSlider = document.getElementById('bassCurveSlider');
+const bassCurveValueEl = document.getElementById('bassCurveValue');
+const trebleCurveSlider = document.getElementById('trebleCurveSlider');
+const trebleCurveValueEl = document.getElementById('trebleCurveValue');
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
@@ -126,11 +126,8 @@ function ensureAudioGraph() {
   analyserRight = audioContext.createAnalyser();
   analyserLeft.fftSize = 8192;
   analyserRight.fftSize = 8192;
-  // Set to 0 so per-band EMA (bandEnergySmoothed) owns all temporal behaviour;
-  // the frequency-dependent smoothing produces transient spikes at treble and
-  // rolling hills at bass, which is not achievable with a single global constant.
-  analyserLeft.smoothingTimeConstant = 0;
-  analyserRight.smoothingTimeConstant = 0;
+  analyserLeft.smoothingTimeConstant = 0.8;
+  analyserRight.smoothingTimeConstant = 0.8;
   leftData = new Uint8Array(analyserLeft.frequencyBinCount);
   rightData = new Uint8Array(analyserRight.frequencyBinCount);
 
@@ -177,12 +174,6 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
 // Indices 0–49 = BOTTOM_FREQS, 50–99 = TOP_FREQS.
 const panSmoothed = new Float32Array(FREQ_COUNT);
 
-// Per-band energy envelope with frequency-dependent EMA.
-// Bass bands (logT≈0) use a slow alpha → rolling hills.
-// Treble bands (logT≈1) use a fast alpha → sharp transient spikes.
-// Allocated once; updated each frame inside drawVisualizer (no per-frame alloc).
-const bandEnergySmoothed = new Float32Array(FREQ_COUNT);
-
 // Use the absolute L–R difference rather than the relative ratio (R-L)/(R+L).
 // Relative normalization causes pan to collapse toward center whenever centered
 // content is added to a band, because it grows the denominator without changing
@@ -206,13 +197,13 @@ function amplitudeToHeightFactor(energy) {
   );
 }
 
-// Transient-response EMA alpha interpolated by log-frequency.
-// bassSmoothingSlider (default 0.94) → slow decay at 20 Hz → rolling hills.
-// trebleSmoothingSlider (default 0.55) → fast decay at 20 kHz → sharp spikes.
-function frequencyToSmoothingAlpha(logT) {
-  const alphaLow = Number(bassSmoothingSlider.value);
-  const alphaHigh = Number(trebleSmoothingSlider.value);
-  return alphaLow + (alphaHigh - alphaLow) * logT;
+// Height-shape exponent interpolated by log-frequency.
+// Bass (logT=0): expLow > 1 compresses energy → short, round hills.
+// Treble (logT=1): expHigh < 1 expands energy → tall, sharp spikes.
+function frequencyToHeightExponent(logT) {
+  const expLow = Number(bassCurveSlider.value);
+  const expHigh = Number(trebleCurveSlider.value);
+  return expLow + (expHigh - expLow) * logT;
 }
 
 // Psychoacoustic localization spread: low frequencies are harder to localize (wider),
@@ -292,13 +283,11 @@ function drawVisualizer() {
     const alpha = computeAlpha(depth);
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
-    const rawEnergy = (l + r) / 2;
-    const emaAlpha = frequencyToSmoothingAlpha(logT);
+    const energy = (l + r) / 2;
+    const displayEnergy = Math.min(1, Math.pow(energy, frequencyToHeightExponent(logT)));
     const globalIdx = 50 + i;
-    bandEnergySmoothed[globalIdx] = emaAlpha * bandEnergySmoothed[globalIdx] + (1 - emaAlpha) * rawEnergy;
-    const energy = bandEnergySmoothed[globalIdx];
     const rawPan = toPanPoint(l, r);
-    if (rawEnergy > 0.02) {
+    if (energy > 0.02) {
       panSmoothed[globalIdx] = panSmoothed[globalIdx] * 0.85 + rawPan * 0.15;
     } else {
       panSmoothed[globalIdx] *= 0.92; // decay toward center when band is silent
@@ -310,7 +299,7 @@ function drawVisualizer() {
       dir: -1,
       rgb,
       alpha,
-      energy,
+      energy: displayEnergy,
       logT,
       panPoint: panSmoothed[globalIdx],
     });
@@ -327,12 +316,10 @@ function drawVisualizer() {
     const alpha = computeAlpha(depth);
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
-    const rawEnergy = (l + r) / 2;
-    const emaAlpha = frequencyToSmoothingAlpha(logT);
-    bandEnergySmoothed[i] = emaAlpha * bandEnergySmoothed[i] + (1 - emaAlpha) * rawEnergy;
-    const energy = bandEnergySmoothed[i];
+    const energy = (l + r) / 2;
+    const displayEnergy = Math.min(1, Math.pow(energy, frequencyToHeightExponent(logT)));
     const rawPan = toPanPoint(l, r);
-    if (rawEnergy > 0.02) {
+    if (energy > 0.02) {
       panSmoothed[i] = panSmoothed[i] * 0.85 + rawPan * 0.15;
     } else {
       panSmoothed[i] *= 0.92; // decay toward center when band is silent
@@ -344,7 +331,7 @@ function drawVisualizer() {
       dir: 1,
       rgb,
       alpha,
-      energy,
+      energy: displayEnergy,
       logT,
       panPoint: panSmoothed[i],
     });
@@ -509,8 +496,8 @@ function makeSliderPair(slider, field, min, max, decimals) {
 makeSliderPair(opacityCurvatureSlider, opacityCurvatureValueEl, -10, 10, 1);
 makeSliderPair(minAlphaSlider, minAlphaValueEl, 0, 1, 2);
 makeSliderPair(maxAlphaSlider, maxAlphaValueEl, 0, 1, 2);
-makeSliderPair(bassSmoothingSlider, bassSmoothingValueEl, 0.80, 0.99, 2);
-makeSliderPair(trebleSmoothingSlider, trebleSmoothingValueEl, 0.20, 0.80, 2);
+makeSliderPair(bassCurveSlider, bassCurveValueEl, 0.50, 3.00, 1);
+makeSliderPair(trebleCurveSlider, trebleCurveValueEl, 0.20, 1.50, 1);
 
 // Nudge buttons: step a slider by one unit in either direction.
 document.addEventListener('click', (e) => {

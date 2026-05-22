@@ -6,6 +6,12 @@ const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
 const panScaleSlider = document.getElementById('panScaleSlider');
 const panScaleValueEl = document.getElementById('panScaleValue');
+const opacityCurvatureSlider = document.getElementById('opacityCurvatureSlider');
+const opacityCurvatureValueEl = document.getElementById('opacityCurvatureValue');
+const minAlphaSlider = document.getElementById('minAlphaSlider');
+const minAlphaValueEl = document.getElementById('minAlphaValue');
+const maxAlphaSlider = document.getElementById('maxAlphaSlider');
+const maxAlphaValueEl = document.getElementById('maxAlphaValue');
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
@@ -33,6 +39,25 @@ const COLOR_STOPS = [
   { t: 1,      r: 75,  g: 46,  b: 255 },
 ];
 
+// Compute per-band alpha from drawing depth (0=back, 1=front) and the three opacity sliders.
+// Curvature e > 0: steep drop at back, flattens toward front.
+// Curvature e < 0: flat at back, steep drop toward front.
+// e = 0: linear.
+function computeAlpha(depth) {
+  const e = Number(opacityCurvatureSlider.value);
+  const minA = Number(minAlphaSlider.value);
+  const maxA = Number(maxAlphaSlider.value);
+  let t;
+  if (e > 0) {
+    t = Math.pow(1 - depth, e);
+  } else if (e < 0) {
+    t = 1 - Math.pow(depth, -e);
+  } else {
+    t = 1 - depth;
+  }
+  return minA + (maxA - minA) * t;
+}
+
 function interpolateColor(t) {
   let i = 0;
   while (i < COLOR_STOPS.length - 2 && COLOR_STOPS[i + 1].t <= t) i += 1;
@@ -56,10 +81,7 @@ const FREQUENCIES = Array.from({ length: FREQ_COUNT }, (_, i) => {
   // Bottom half (i<50): drawn 0→49, so front = i=49  → depth = i/49
   // Top half   (i≥50): drawn 99→50, so front = i=50  → depth = (99-i)/49
   const depth = i < 50 ? i / 49 : (99 - i) / 49;
-  // Power-curve alpha: back bands stay opaque enough to read, front bands
-  // (yellows at the equator) are kept faint so they don't occlude everything.
-  const alpha = 0.06 + 0.50 * Math.pow(1 - depth, 2.5);
-  return { hz, logT, rgb, alpha };
+  return { hz, logT, rgb, depth };
 });
 
 // Bottom semicircle: indices 0–49 (lower 50, 20Hz–~611Hz)
@@ -244,7 +266,8 @@ function drawVisualizer() {
   ctx.rect(cx - radius, cy - radius, radius * 2, radius);
   ctx.clip();
   for (let i = TOP_FREQS.length - 1; i >= 0; i -= 1) {
-    const { hz, logT, rgb, alpha } = TOP_FREQS[i];
+    const { hz, logT, rgb, depth } = TOP_FREQS[i];
+    const alpha = computeAlpha(depth);
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const energy = (l + r) / 2;
@@ -275,7 +298,8 @@ function drawVisualizer() {
   ctx.beginPath();
   ctx.rect(cx - radius, cy, radius * 2, radius);
   ctx.clip();
-  BOTTOM_FREQS.forEach(({ hz, logT, rgb, alpha }, i) => {
+  BOTTOM_FREQS.forEach(({ hz, logT, rgb, depth }, i) => {
+    const alpha = computeAlpha(depth);
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const energy = (l + r) / 2;
@@ -439,6 +463,24 @@ panScaleValueEl.addEventListener('change', () => {
   panScaleValueEl.value = clamped.toFixed(2);
   panScaleSlider.value = clamped;
 });
+
+function makeSliderPair(slider, field, min, max, decimals) {
+  slider.addEventListener('input', () => {
+    field.value = Number(slider.value).toFixed(decimals);
+  });
+  field.addEventListener('focus', () => { field.select(); });
+  field.addEventListener('keydown', (e) => { if (e.key === 'Enter') field.blur(); });
+  field.addEventListener('change', () => {
+    const raw = parseFloat(field.value);
+    const clamped = isNaN(raw) ? Number(slider.value) : Math.max(min, Math.min(max, raw));
+    field.value = clamped.toFixed(decimals);
+    slider.value = clamped;
+  });
+}
+
+makeSliderPair(opacityCurvatureSlider, opacityCurvatureValueEl, -10, 10, 1);
+makeSliderPair(minAlphaSlider, minAlphaValueEl, 0, 1, 2);
+makeSliderPair(maxAlphaSlider, maxAlphaValueEl, 0, 1, 2);
 
 audio.addEventListener('ended', () => {
   playPauseBtn.textContent = 'Play';

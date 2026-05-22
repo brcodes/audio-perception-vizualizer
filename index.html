@@ -41,6 +41,20 @@
           <button class="nudge-btn" data-target="maxAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase max alpha">+</button>
         </span>
         <input id="maxAlphaValue" type="number" min="0" max="1" step="0.01" value="1.00" class="ctrl-value-input" aria-label="Max alpha value" />
+        <label for="bassSmoothingSlider" class="ctrl-label">Bass Smoothing</label>
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="bassSmoothingSlider" data-dir="-1" tabindex="-1" aria-label="Decrease bass smoothing">−</button>
+          <input id="bassSmoothingSlider" type="range" min="0.80" max="0.99" value="0.94" step="0.01" class="ctrl-slider" aria-label="Bass smoothing alpha" />
+          <button class="nudge-btn" data-target="bassSmoothingSlider" data-dir="1" tabindex="-1" aria-label="Increase bass smoothing">+</button>
+        </span>
+        <input id="bassSmoothingValue" type="number" min="0.80" max="0.99" step="0.01" value="0.94" class="ctrl-value-input" aria-label="Bass smoothing value" />
+        <label for="trebleSmoothingSlider" class="ctrl-label">Treble Smoothing</label>
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="trebleSmoothingSlider" data-dir="-1" tabindex="-1" aria-label="Decrease treble smoothing">−</button>
+          <input id="trebleSmoothingSlider" type="range" min="0.20" max="0.80" value="0.55" step="0.01" class="ctrl-slider" aria-label="Treble smoothing alpha" />
+          <button class="nudge-btn" data-target="trebleSmoothingSlider" data-dir="1" tabindex="-1" aria-label="Increase treble smoothing">+</button>
+        </span>
+        <input id="trebleSmoothingValue" type="number" min="0.20" max="0.80" step="0.01" value="0.55" class="ctrl-value-input" aria-label="Treble smoothing value" />
       </section>
       <section class="seekbar">
         <span id="currentTime">0:00</span>

@@ -323,7 +323,7 @@ fileInput.addEventListener('change', async (event) => {
   totalTimeEl.textContent = '0:00';
 });
 
-playPauseBtn.addEventListener('click', async () => {
+async function togglePlayPause() {
   if (!audio.src) return;
   ensureAudioGraph();
   if (audioContext.state === 'suspended') await audioContext.resume();
@@ -337,6 +337,20 @@ playPauseBtn.addEventListener('click', async () => {
     playPauseBtn.textContent = 'Play';
     stopAnimation();
   }
+}
+
+playPauseBtn.addEventListener('click', () => togglePlayPause());
+
+let isPointerOverApp = false;
+const appEl = document.querySelector('.app');
+appEl.addEventListener('mouseenter', () => { isPointerOverApp = true; });
+appEl.addEventListener('mouseleave', () => { isPointerOverApp = false; });
+
+document.addEventListener('keydown', (e) => {
+  if (!isPointerOverApp) return;
+  if (e.key !== ' ' && e.key !== 'Enter') return;
+  e.preventDefault();
+  togglePlayPause();
 });
 
 audio.addEventListener('loadedmetadata', () => {

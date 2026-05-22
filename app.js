@@ -482,6 +482,27 @@ makeSliderPair(opacityCurvatureSlider, opacityCurvatureValueEl, -10, 10, 1);
 makeSliderPair(minAlphaSlider, minAlphaValueEl, 0, 1, 2);
 makeSliderPair(maxAlphaSlider, maxAlphaValueEl, 0, 1, 2);
 
+// Nudge buttons: step a slider by one unit in either direction.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.nudge-btn');
+  if (!btn) return;
+  const slider = document.getElementById(btn.dataset.target);
+  if (!slider || slider.disabled) return;
+  const dir = Number(btn.dataset.dir);
+  const step = parseFloat(slider.step) || 1;
+  const min = parseFloat(slider.min);
+  const max = parseFloat(slider.max);
+  const decimals = (slider.step.toString().split('.')[1] || '').length;
+  const newVal = parseFloat(
+    Math.max(min, Math.min(max, parseFloat(slider.value) + dir * step)).toFixed(decimals)
+  );
+  slider.value = newVal;
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  if (slider.id === 'seekSlider') {
+    audio.currentTime = newVal;
+  }
+});
+
 audio.addEventListener('ended', () => {
   playPauseBtn.textContent = 'Play';
   stopAnimation();

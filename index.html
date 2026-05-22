@@ -14,21 +14,41 @@
         <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
         <button id="playPauseBtn" type="button" disabled>Play</button>
         <label for="panScaleSlider" class="ctrl-label">Pan Scale</label>
-        <input id="panScaleSlider" type="range" min="0.10" max="0.80" value="0.14" step="0.01" class="ctrl-slider" aria-label="Pan scale sensitivity" />
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="panScaleSlider" data-dir="-1" tabindex="-1" aria-label="Decrease pan scale">−</button>
+          <input id="panScaleSlider" type="range" min="0.10" max="0.80" value="0.14" step="0.01" class="ctrl-slider" aria-label="Pan scale sensitivity" />
+          <button class="nudge-btn" data-target="panScaleSlider" data-dir="1" tabindex="-1" aria-label="Increase pan scale">+</button>
+        </span>
         <input id="panScaleValue" type="number" min="0.10" max="0.80" step="0.01" value="0.14" class="ctrl-value-input" aria-label="Pan scale value" />
         <label for="opacityCurvatureSlider" class="ctrl-label">Opacity Curvature, Z-axis</label>
-        <input id="opacityCurvatureSlider" type="range" min="-10" max="10" value="3" step="0.1" class="ctrl-slider" aria-label="Opacity curvature Z-axis" />
-        <input id="opacityCurvatureValue" type="number" min="-10" max="10" step="0.1" value="3" class="ctrl-value-input" aria-label="Opacity curvature value" />
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="opacityCurvatureSlider" data-dir="-1" tabindex="-1" aria-label="Decrease opacity curvature">−</button>
+          <input id="opacityCurvatureSlider" type="range" min="-10" max="10" value="5.5" step="0.1" class="ctrl-slider" aria-label="Opacity curvature Z-axis" />
+          <button class="nudge-btn" data-target="opacityCurvatureSlider" data-dir="1" tabindex="-1" aria-label="Increase opacity curvature">+</button>
+        </span>
+        <input id="opacityCurvatureValue" type="number" min="-10" max="10" step="0.1" value="5.5" class="ctrl-value-input" aria-label="Opacity curvature value" />
         <label for="minAlphaSlider" class="ctrl-label">Min Alpha</label>
-        <input id="minAlphaSlider" type="range" min="0" max="1" value="0.12" step="0.01" class="ctrl-slider" aria-label="Minimum band alpha" />
-        <input id="minAlphaValue" type="number" min="0" max="1" step="0.01" value="0.12" class="ctrl-value-input" aria-label="Min alpha value" />
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="minAlphaSlider" data-dir="-1" tabindex="-1" aria-label="Decrease min alpha">−</button>
+          <input id="minAlphaSlider" type="range" min="0" max="1" value="0.06" step="0.01" class="ctrl-slider" aria-label="Minimum band alpha" />
+          <button class="nudge-btn" data-target="minAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase min alpha">+</button>
+        </span>
+        <input id="minAlphaValue" type="number" min="0" max="1" step="0.01" value="0.06" class="ctrl-value-input" aria-label="Min alpha value" />
         <label for="maxAlphaSlider" class="ctrl-label">Max Alpha</label>
-        <input id="maxAlphaSlider" type="range" min="0" max="1" value="0.56" step="0.01" class="ctrl-slider" aria-label="Maximum band alpha" />
-        <input id="maxAlphaValue" type="number" min="0" max="1" step="0.01" value="0.56" class="ctrl-value-input" aria-label="Max alpha value" />
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="maxAlphaSlider" data-dir="-1" tabindex="-1" aria-label="Decrease max alpha">−</button>
+          <input id="maxAlphaSlider" type="range" min="0" max="1" value="1.00" step="0.01" class="ctrl-slider" aria-label="Maximum band alpha" />
+          <button class="nudge-btn" data-target="maxAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase max alpha">+</button>
+        </span>
+        <input id="maxAlphaValue" type="number" min="0" max="1" step="0.01" value="1.00" class="ctrl-value-input" aria-label="Max alpha value" />
       </section>
       <section class="seekbar">
         <span id="currentTime">0:00</span>
-        <input id="seekSlider" type="range" min="0" max="100" value="0" step="0.1" disabled aria-label="Seek" />
+        <span class="slider-row seek-row">
+          <button class="nudge-btn" data-target="seekSlider" data-dir="-1" tabindex="-1" aria-label="Seek back">−</button>
+          <input id="seekSlider" type="range" min="0" max="100" value="0" step="0.1" disabled aria-label="Seek" />
+          <button class="nudge-btn" data-target="seekSlider" data-dir="1" tabindex="-1" aria-label="Seek forward">+</button>
+        </span>
         <span id="totalTime">0:00</span>
       </section>
       <canvas id="vizCanvas" role="img" aria-label="Music Mix Map Visualizer">

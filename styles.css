@@ -67,6 +67,47 @@ body {
   white-space: nowrap;
 }
 
+.slider-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.seek-row {
+  flex: 1;
+}
+
+.seek-row #seekSlider {
+  flex: 1;
+}
+
+.nudge-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  font-size: 0.78rem;
+  line-height: 1;
+  border-radius: 3px;
+  border: 1px solid #3e4955;
+  background: #1a2129;
+  color: #8a9baa;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.nudge-btn:hover {
+  background: #2f3944;
+  color: #e8edf2;
+}
+
+.nudge-btn:active {
+  background: #3c4752;
+}
+
 #seekSlider {
   flex: 1;
   -webkit-appearance: none;

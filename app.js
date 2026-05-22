@@ -4,6 +4,8 @@ const playPauseBtn = document.getElementById('playPauseBtn');
 const seekSlider = document.getElementById('seekSlider');
 const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
+const panScaleSlider = document.getElementById('panScaleSlider');
+const panScaleValueEl = document.getElementById('panScaleValue');
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
@@ -137,10 +139,19 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
   return count ? Math.sqrt(sumSq / count) : 0;
 }
 
+// Per-band smoothed pan state — persists across frames for temporal stability.
+// Indices 0–49 = BOTTOM_FREQS, 50–99 = TOP_FREQS.
+const panSmoothed = new Float32Array(FREQ_COUNT);
+
+// Use the absolute L–R difference rather than the relative ratio (R-L)/(R+L).
+// Relative normalization causes pan to collapse toward center whenever centered
+// content is added to a band, because it grows the denominator without changing
+// the numerator. Absolute difference is immune: adding equal energy to both
+// channels leaves (R-L) unchanged, so the displayed pan position stays put.
 function toPanPoint(left, right) {
   if (left + right < 0.015) return 0;
-  const pan = (right - left) / (right + left + DIVISION_EPSILON);
-  return Math.max(-100, Math.min(100, Math.round(pan * 100)));
+  const scale = Number(panScaleSlider.value);
+  return Math.max(-100, Math.min(100, Math.round(((right - left) / scale) * 100)));
 }
 
 function amplitudeToHeightFactor(energy) {
@@ -231,6 +242,14 @@ function drawVisualizer() {
     const { hz, logT, rgb, alpha } = TOP_FREQS[i];
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
+    const energy = (l + r) / 2;
+    const rawPan = toPanPoint(l, r);
+    const globalIdx = 50 + i;
+    if (energy > 0.02) {
+      panSmoothed[globalIdx] = panSmoothed[globalIdx] * 0.85 + rawPan * 0.15;
+    } else {
+      panSmoothed[globalIdx] *= 0.92; // decay toward center when band is silent
+    }
     drawWaveform({
       centerX: cx,
       centerY: cy,
@@ -238,9 +257,9 @@ function drawVisualizer() {
       dir: -1,
       rgb,
       alpha,
-      energy: (l + r) / 2,
+      energy,
       logT,
-      panPoint: toPanPoint(l, r),
+      panPoint: panSmoothed[globalIdx],
     });
   }
   ctx.restore();
@@ -251,9 +270,16 @@ function drawVisualizer() {
   ctx.beginPath();
   ctx.rect(cx - radius, cy, radius * 2, radius);
   ctx.clip();
-  BOTTOM_FREQS.forEach(({ hz, logT, rgb, alpha }) => {
+  BOTTOM_FREQS.forEach(({ hz, logT, rgb, alpha }, i) => {
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
+    const energy = (l + r) / 2;
+    const rawPan = toPanPoint(l, r);
+    if (energy > 0.02) {
+      panSmoothed[i] = panSmoothed[i] * 0.85 + rawPan * 0.15;
+    } else {
+      panSmoothed[i] *= 0.92; // decay toward center when band is silent
+    }
     drawWaveform({
       centerX: cx,
       centerY: cy,
@@ -261,9 +287,9 @@ function drawVisualizer() {
       dir: 1,
       rgb,
       alpha,
-      energy: (l + r) / 2,
+      energy,
       logT,
-      panPoint: toPanPoint(l, r),
+      panPoint: panSmoothed[i],
     });
   });
   ctx.restore();
@@ -349,7 +375,7 @@ appEl.addEventListener('mouseleave', () => { isPointerOverApp = false; });
 
 document.addEventListener('keydown', (e) => {
   if (!isPointerOverApp) return;
-  if (e.key !== ' ' && e.key !== 'Enter') return;
+  if (e.key !== ' ') return;
   e.preventDefault();
   togglePlayPause();
 });
@@ -386,6 +412,27 @@ seekSlider.addEventListener('pointerup', async () => {
     playPauseBtn.textContent = 'Pause';
     startAnimation();
   }
+});
+
+panScaleSlider.addEventListener('input', () => {
+  panScaleValueEl.value = Number(panScaleSlider.value).toFixed(2);
+});
+
+panScaleValueEl.addEventListener('focus', () => {
+  panScaleValueEl.select();
+});
+
+panScaleValueEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') panScaleValueEl.blur();
+});
+
+panScaleValueEl.addEventListener('change', () => {
+  const raw = parseFloat(panScaleValueEl.value);
+  const clamped = isNaN(raw)
+    ? Number(panScaleSlider.value)
+    : Math.max(0.10, Math.min(0.80, raw));
+  panScaleValueEl.value = clamped.toFixed(2);
+  panScaleSlider.value = clamped;
 });
 
 audio.addEventListener('ended', () => {

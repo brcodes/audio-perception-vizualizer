@@ -1,6 +1,6 @@
 # music-mix-mapper
 
-Music Mix Mapper is a static JavaScript web app for MP3-driven 2D circular visualization focused on mixing use-cases.
+The Music Mix Map is a static JavaScript web app for MP3-driven 2D circular visualization focused on mixing use-cases.
 
 ## Run locally
 

@@ -21,12 +21,14 @@ const TYPICAL_HEIGHT_FACTOR = 0.38;
 const PEAK_HEIGHT_FACTOR = 0.527;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
-// Option A (Logic default): fixed display scale where full-scale peaks approach display top.
-const ANALYSER_FIXED_MAX_DB = 0;
+// -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
+// so the bulk of a loud mix immediately drives band energy toward 1.0 and fills the display.
+const ANALYSER_FIXED_MAX_DB = -30;
 // Shared dB span keeps low-level material visible without crushing loud transients.
 const ANALYSER_DYNAMIC_RANGE_DB = 70;
 const ANALYSER_HEADROOM_DB = 1;
-const MAX_ANALYSER_MAX_DB = 0;
+// 3 dB below full scale gives tight headroom so a track's own peak → 255 in Option B (Normalize Height On).
+const MAX_ANALYSER_MAX_DB = -3;
 const MIN_ANALYSER_MAX_DB = -50;
 // Small side bleed lets hard-panned shapes complete without inventing pan points beyond +/-100.
 const PAN_EDGE_BLEED_PX = 14;

@@ -16,8 +16,7 @@ const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
-const TYPICAL_ENERGY_THRESHOLD = 0.45;
-const TYPICAL_HEIGHT_FACTOR = 0.38;
+// Full-scale band energy maps linearly to 52.7% of half-frame height to preserve amplitude proportion.
 const PEAK_HEIGHT_FACTOR = 0.527;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
@@ -40,8 +39,6 @@ const PAN_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const PAN_DISPLAY_LINE_WIDTH = 1;
 const PAN_DISPLAY_NOTCH_HALF_HEIGHT = 4;
 const PAN_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
-// Fixed transient mapping removes per-band curve styling for a more uniform waveform language.
-const TRANSIENT_ENERGY_EXPONENT = 0.78;
 // Right-to-left sweep speed (cycles/sec) makes crest peaks read as transients crossing a window.
 const TRANSIENT_SWEEP_HZ = 1.35;
 const TRANSIENT_SKEW_MIN = 0.2;
@@ -317,19 +314,8 @@ function toPanPoint(left, right) {
 }
 
 function amplitudeToHeightFactor(energy) {
-  if (energy <= TYPICAL_ENERGY_THRESHOLD) {
-    return (energy / TYPICAL_ENERGY_THRESHOLD) * TYPICAL_HEIGHT_FACTOR;
-  }
-  const headroomHeight = PEAK_HEIGHT_FACTOR - TYPICAL_HEIGHT_FACTOR;
-  const headroomEnergy = 1 - TYPICAL_ENERGY_THRESHOLD;
-  return (
-    TYPICAL_HEIGHT_FACTOR +
-    ((energy - TYPICAL_ENERGY_THRESHOLD) / headroomEnergy) * headroomHeight
-  );
-}
-
-function shapeEnergyForTransientView(energy) {
-  return Math.min(1, Math.pow(Math.max(0, energy), TRANSIENT_ENERGY_EXPONENT));
+  // Linear amplitude mapping avoids bass/treble height distortion from non-linear display curves.
+  return Math.max(0, Math.min(1, energy)) * PEAK_HEIGHT_FACTOR;
 }
 
 function computeTransientSweepT() {
@@ -469,7 +455,7 @@ function drawVisualizer() {
     const l = getBandEnergy(left, band.minHz, band.maxHz, sampleRate);
     const r = getBandEnergy(right, band.minHz, band.maxHz, sampleRate);
     const energy = (l + r) / 2;
-    const displayEnergy = shapeEnergyForTransientView(energy);
+    const displayEnergy = energy;
     const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
     if (energy > 0.02) {
@@ -503,7 +489,7 @@ function drawVisualizer() {
     const l = getBandEnergy(left, band.minHz, band.maxHz, sampleRate);
     const r = getBandEnergy(right, band.minHz, band.maxHz, sampleRate);
     const energy = (l + r) / 2;
-    const displayEnergy = shapeEnergyForTransientView(energy);
+    const displayEnergy = energy;
     const rawPan = toPanPoint(l, r);
     if (energy > 0.02) {
       panSmoothed[i] = panSmoothed[i] * 0.85 + rawPan * 0.15;

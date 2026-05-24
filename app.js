@@ -8,6 +8,8 @@ const panScaleSlider = document.getElementById('panScaleSlider');
 const panScaleValueEl = document.getElementById('panScaleValue');
 const lineAlphaSlider = document.getElementById('lineAlphaSlider');
 const lineAlphaValueEl = document.getElementById('lineAlphaValue');
+const lineThicknessSlider = document.getElementById('lineThicknessSlider');
+const lineThicknessValueEl = document.getElementById('lineThicknessValue');
 const bassCurveSlider = document.getElementById('bassCurveSlider');
 const bassCurveValueEl = document.getElementById('bassCurveValue');
 const trebleCurveSlider = document.getElementById('trebleCurveSlider');
@@ -18,6 +20,8 @@ const DIVISION_EPSILON = 1e-6;
 const TYPICAL_ENERGY_THRESHOLD = 0.45;
 const TYPICAL_HEIGHT_FACTOR = 0.7;
 const PEAK_HEIGHT_FACTOR = 0.97;
+const BASE_LINE_THICKNESS_CONTROL = 0.70;
+const BASE_LINE_WIDTH_PX = 1.25;
 
 const FREQ_COUNT = 100;
 // Half-bin ratio for constant-Q narrow bands: ±half a log-bin around each center frequency
@@ -185,7 +189,7 @@ function frequencyToWidthFactor(logT) {
   return 0.08 - 0.04 * logT; // 0.08 at 20Hz → 0.04 at 20kHz
 }
 
-function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, energy, logT, panPoint }) {
+function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint }) {
   const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
   const height = radius * heightFactor;
 
@@ -204,7 +208,7 @@ function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, energy, l
 
   // Draw only the waveform crest line; fill mode is intentionally disabled.
   ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineAlpha})`;
-  ctx.lineWidth = 1.25;
+  ctx.lineWidth = lineWidth;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
   ctx.quadraticCurveTo(actualCenterX, centerY + dir * height * 2, maxX, centerY);
@@ -235,6 +239,10 @@ function drawVisualizer() {
   const left = leftData || ZERO_FREQUENCY_DATA;
   const right = rightData || ZERO_FREQUENCY_DATA;
   const lineAlpha = Number(lineAlphaSlider.value);
+  // Keep visual continuity: slider value 0.70 reproduces the prior fixed 1.25px line width.
+  const lineWidth =
+    (Math.max(0.01, Number(lineThicknessSlider.value)) / BASE_LINE_THICKNESS_CONTROL) *
+    BASE_LINE_WIDTH_PX;
 
   ctx.save();
   ctx.beginPath();
@@ -267,6 +275,7 @@ function drawVisualizer() {
       dir: -1,
       rgb,
       lineAlpha,
+      lineWidth,
       energy: displayEnergy,
       logT,
       panPoint: panSmoothed[globalIdx],
@@ -298,6 +307,7 @@ function drawVisualizer() {
       dir: 1,
       rgb,
       lineAlpha,
+      lineWidth,
       energy: displayEnergy,
       logT,
       panPoint: panSmoothed[i],
@@ -461,6 +471,7 @@ function makeSliderPair(slider, field, min, max, decimals) {
 }
 
 makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
+makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
 makeSliderPair(bassCurveSlider, bassCurveValueEl, 0.50, 3.00, 1);
 makeSliderPair(trebleCurveSlider, trebleCurveValueEl, 0.20, 1.50, 1);
 

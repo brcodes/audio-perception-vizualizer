@@ -27,6 +27,13 @@
           <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase line alpha">+</button>
         </span>
         <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="0.85" class="ctrl-value-input" aria-label="Line alpha value" />
+        <label for="lineThicknessSlider" class="ctrl-label">Line Thickness</label>
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="-1" tabindex="-1" aria-label="Decrease line thickness">−</button>
+          <input id="lineThicknessSlider" type="range" min="0.01" max="1.0" value="0.70" step="0.01" class="ctrl-slider" aria-label="Waveform line thickness" />
+          <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="1" tabindex="-1" aria-label="Increase line thickness">+</button>
+        </span>
+        <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.70" class="ctrl-value-input" aria-label="Line thickness value" />
         <label for="bassCurveSlider" class="ctrl-label">Bass Curve</label>
         <span class="slider-row">
           <button class="nudge-btn" data-target="bassCurveSlider" data-dir="-1" tabindex="-1" aria-label="Decrease bass curve">−</button>

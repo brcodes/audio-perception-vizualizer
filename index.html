@@ -43,6 +43,13 @@
           <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="1" tabindex="-1" aria-label="Increase line thickness">+</button>
         </span>
         <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.10" class="ctrl-value-input" aria-label="Line thickness value" />
+        <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (by Amp) Level</label>
+        <span class="slider-row">
+          <button class="nudge-btn" data-target="widthBoostSlider" data-dir="-1" tabindex="-1" aria-label="Decrease wave width boost level">−</button>
+          <input id="widthBoostSlider" type="range" min="0.00" max="1.00" value="0.35" step="0.01" class="ctrl-slider" aria-label="Wave width boost by amplitude level" />
+          <button class="nudge-btn" data-target="widthBoostSlider" data-dir="1" tabindex="-1" aria-label="Increase wave width boost level">+</button>
+        </span>
+        <input id="widthBoostValue" type="number" min="0.00" max="1.00" step="0.01" value="0.35" class="ctrl-value-input" aria-label="Wave width boost by amplitude level value" />
       </section>
       <section class="seekbar">
         <span id="currentTime">0:00</span>

@@ -10,6 +10,8 @@ const lineAlphaSlider = document.getElementById('lineAlphaSlider');
 const lineAlphaValueEl = document.getElementById('lineAlphaValue');
 const lineThicknessSlider = document.getElementById('lineThicknessSlider');
 const lineThicknessValueEl = document.getElementById('lineThicknessValue');
+const widthBoostSlider = document.getElementById('widthBoostSlider');
+const widthBoostValueEl = document.getElementById('widthBoostValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
@@ -32,7 +34,7 @@ const WIDTH_COMPRESSION = 0.2; // α = 1/5
 // Stevens-style loudness mapping for amplitude (A^0.67) keeps width growth perceptually realistic.
 const WIDTH_LOUDNESS_EXPONENT = 0.67;
 // Max proportional width expansion at full band level (independent of pitch by design).
-const WIDTH_LEVEL_BOOST_RATIO = 0.35;
+const DEFAULT_WIDTH_LEVEL_BOOST_RATIO = 0.35;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
 // -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
@@ -179,6 +181,7 @@ let isPanDisplayLineVisible = true;
 let isBinauralPanDisplayActive = false;
 let isHeightNormalized = false;
 let isHeightNormalizationCalibrating = false;
+let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
 let currentFile;
 let analysisGeneration = 0;
 
@@ -364,7 +367,7 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
   const widthBase = frequencyToWidthFactor(logT);
   const clampedEnergy = Math.max(0, Math.min(1, energy));
   const levelBoost =
-    widthBase * WIDTH_LEVEL_BOOST_RATIO * Math.pow(clampedEnergy, WIDTH_LOUDNESS_EXPONENT);
+    widthBase * widthLevelBoostRatio * Math.pow(clampedEnergy, WIDTH_LOUDNESS_EXPONENT);
   let halfWidth = radius * (widthBase + levelBoost);
   // Off: no pan inflation — width driven purely by pitch and amplitude.
   // On: (1-cosθ) binaural spread bonus; zero at center, max lateral wrap at ±100.
@@ -789,6 +792,23 @@ function makeSliderPair(slider, field, min, max, decimals) {
 
 makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
 makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
+makeSliderPair(widthBoostSlider, widthBoostValueEl, 0, 1.0, 2);
+
+function setWidthLevelBoostRatio(nextRatio) {
+  const clamped = Math.max(0, Math.min(1, nextRatio));
+  if (Math.abs(widthLevelBoostRatio - clamped) < DIVISION_EPSILON) return;
+  widthLevelBoostRatio = clamped;
+  drawVisualizer();
+}
+
+widthBoostSlider.addEventListener('input', () => {
+  setWidthLevelBoostRatio(Number(widthBoostSlider.value));
+});
+
+widthBoostValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  setWidthLevelBoostRatio(Number(widthBoostSlider.value));
+});
 
 // Nudge buttons: step a slider by one unit in either direction.
 document.addEventListener('click', (e) => {

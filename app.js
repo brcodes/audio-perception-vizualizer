@@ -11,15 +11,23 @@ const lineAlphaValueEl = document.getElementById('lineAlphaValue');
 const lineThicknessSlider = document.getElementById('lineThicknessSlider');
 const lineThicknessValueEl = document.getElementById('lineThicknessValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
+const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
 const TYPICAL_ENERGY_THRESHOLD = 0.45;
-const TYPICAL_HEIGHT_FACTOR = 0.7;
-const PEAK_HEIGHT_FACTOR = 0.97;
+const TYPICAL_HEIGHT_FACTOR = 0.38;
+const PEAK_HEIGHT_FACTOR = 0.527;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
+// Option A (Logic default): fixed display scale where full-scale peaks approach display top.
+const ANALYSER_FIXED_MAX_DB = 0;
+// Shared dB span keeps low-level material visible without crushing loud transients.
+const ANALYSER_DYNAMIC_RANGE_DB = 70;
+const ANALYSER_HEADROOM_DB = 1;
+const MAX_ANALYSER_MAX_DB = 0;
+const MIN_ANALYSER_MAX_DB = -50;
 // Small side bleed lets hard-panned shapes complete without inventing pan points beyond +/-100.
 const PAN_EDGE_BLEED_PX = 14;
 const EDGE_FADE_CLEAR = 'rgba(22, 29, 37, 0)';
@@ -154,12 +162,90 @@ let isDocumentHidden = false;
 let isScrubbing = false;
 let wasPlaying = false;
 let isPanDisplayLineVisible = true;
+let isHeightNormalized = false;
+let isHeightNormalizationCalibrating = false;
+let currentFile;
+let analysisGeneration = 0;
 
 function formatTime(seconds) {
   if (!isFinite(seconds) || seconds < 0) return '0:00';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function setAnalyserScale(maxDb) {
+  if (!analyserLeft || !analyserRight) return;
+  const minDb = maxDb - ANALYSER_DYNAMIC_RANGE_DB;
+  analyserLeft.minDecibels = minDb;
+  analyserRight.minDecibels = minDb;
+  analyserLeft.maxDecibels = maxDb;
+  analyserRight.maxDecibels = maxDb;
+}
+
+function applyFixedAnalyserScale() {
+  setAnalyserScale(ANALYSER_FIXED_MAX_DB);
+}
+
+function updateNormalizeHeightToggleState() {
+  const isActive = isHeightNormalized;
+  const statusText = isActive
+    ? (isHeightNormalizationCalibrating ? 'Calibrating...' : 'On')
+    : 'Off';
+  normalizeHeightBtn.textContent = `Normalize Height: ${statusText}`;
+  normalizeHeightBtn.classList.toggle('is-active', isActive);
+  normalizeHeightBtn.classList.toggle('is-calibrating', isActive && isHeightNormalizationCalibrating);
+  normalizeHeightBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+}
+
+function setNormalizeHeightCalibrating(isCalibrating) {
+  if (isHeightNormalizationCalibrating === isCalibrating) return;
+  isHeightNormalizationCalibrating = isCalibrating;
+  updateNormalizeHeightToggleState();
+}
+
+async function analyzeAndCalibrateAnalysers(file) {
+  if (!file || !isHeightNormalized) return;
+  ensureAudioGraph();
+  const generation = ++analysisGeneration;
+  setNormalizeHeightCalibrating(true);
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    if (generation !== analysisGeneration || !isHeightNormalized) return;
+
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+    if (generation !== analysisGeneration || !isHeightNormalized) return;
+
+    let peakAmp = 0;
+    for (let ch = 0; ch < audioBuffer.numberOfChannels; ch += 1) {
+      const channelData = audioBuffer.getChannelData(ch);
+      for (let i = 0; i < channelData.length; i += 1) {
+        const sample = Math.abs(channelData[i]);
+        if (sample > peakAmp) peakAmp = sample;
+      }
+    }
+
+    if (peakAmp <= DIVISION_EPSILON) {
+      setAnalyserScale(MIN_ANALYSER_MAX_DB);
+      return;
+    }
+
+    const peakDb = 20 * Math.log10(peakAmp);
+    const targetMaxDb = Math.max(
+      MIN_ANALYSER_MAX_DB,
+      Math.min(MAX_ANALYSER_MAX_DB, peakDb + ANALYSER_HEADROOM_DB),
+    );
+    setAnalyserScale(targetMaxDb);
+  } catch (error) {
+    // Keep the app interactive if decode/calibration fails for any reason.
+    console.error('Waveform height normalization failed:', error);
+    if (isHeightNormalized) applyFixedAnalyserScale();
+  } finally {
+    if (generation === analysisGeneration && isHeightNormalized) {
+      setNormalizeHeightCalibrating(false);
+      drawVisualizer();
+    }
+  }
 }
 
 function ensureAudioGraph() {
@@ -173,6 +259,7 @@ function ensureAudioGraph() {
   analyserRight.fftSize = 8192;
   analyserLeft.smoothingTimeConstant = 0.8;
   analyserRight.smoothingTimeConstant = 0.8;
+  applyFixedAnalyserScale();
   leftData = new Uint8Array(analyserLeft.frequencyBinCount);
   rightData = new Uint8Array(analyserRight.frequencyBinCount);
 
@@ -480,8 +567,12 @@ fileInput.addEventListener('change', async (event) => {
     return;
   }
 
+  currentFile = file;
+  analysisGeneration += 1;
+  setNormalizeHeightCalibrating(false);
   ensureAudioGraph();
   if (audioContext.state === 'suspended') await audioContext.resume();
+  applyFixedAnalyserScale();
 
   if (objectUrl) URL.revokeObjectURL(objectUrl);
   objectUrl = URL.createObjectURL(file);
@@ -497,6 +588,7 @@ fileInput.addEventListener('change', async (event) => {
   seekSlider.disabled = true;
   currentTimeEl.textContent = '0:00';
   totalTimeEl.textContent = '0:00';
+  if (isHeightNormalized) analyzeAndCalibrateAnalysers(file);
 });
 
 async function togglePlayPause() {
@@ -515,9 +607,36 @@ async function togglePlayPause() {
   }
 }
 
+function toggleNormalizeHeight() {
+  isHeightNormalized = !isHeightNormalized;
+  audio.pause();
+  playPauseBtn.textContent = 'Play';
+  stopAnimation();
+
+  if (!isHeightNormalized) {
+    analysisGeneration += 1;
+    setNormalizeHeightCalibrating(false);
+    applyFixedAnalyserScale();
+    updateNormalizeHeightToggleState();
+    drawVisualizer();
+    return;
+  }
+
+  if (!currentFile) {
+    updateNormalizeHeightToggleState();
+    drawVisualizer();
+    return;
+  }
+
+  analyzeAndCalibrateAnalysers(currentFile);
+  updateNormalizeHeightToggleState();
+  drawVisualizer();
+}
+
 function updatePanLineToggleState() {
   togglePanLineBtn.textContent = isPanDisplayLineVisible ? 'Pan Line: On' : 'Pan Line: Off';
   togglePanLineBtn.classList.toggle('is-active', isPanDisplayLineVisible);
+  togglePanLineBtn.setAttribute('aria-pressed', isPanDisplayLineVisible ? 'true' : 'false');
 }
 
 function updateBandModeButtons() {
@@ -543,6 +662,9 @@ togglePanLineBtn.addEventListener('click', () => {
   isPanDisplayLineVisible = !isPanDisplayLineVisible;
   updatePanLineToggleState();
   drawVisualizer();
+});
+normalizeHeightBtn.addEventListener('click', () => {
+  toggleNormalizeHeight();
 });
 for (let i = 0; i < bandModeButtons.length; i += 1) {
   const button = bandModeButtons[i];
@@ -677,6 +799,7 @@ window.addEventListener('resize', () => {
 });
 
 updatePanLineToggleState();
+updateNormalizeHeightToggleState();
 updateBandModeButtons();
 resizeCanvas();
 drawVisualizer();
@@ -684,7 +807,9 @@ drawVisualizer();
 (function restoreFileOnLoad() {
   const file = fileInput.files?.[0];
   if (file && isMp3File(file)) {
+    currentFile = file;
     ensureAudioGraph();
+    applyFixedAnalyserScale();
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(file);
     audio.src = objectUrl;
@@ -692,7 +817,9 @@ drawVisualizer();
     audio.pause();
     playPauseBtn.disabled = false;
     playPauseBtn.textContent = 'Play';
+    if (isHeightNormalized) analyzeAndCalibrateAnalysers(file);
   } else {
+    currentFile = undefined;
     fileInput.value = '';
   }
 }());

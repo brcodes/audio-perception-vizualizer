@@ -64,6 +64,15 @@ body {
   color: #8a9baa;
 }
 
+#normalizeHeightBtn {
+  min-width: 11.5rem;
+}
+
+#normalizeHeightBtn.is-calibrating {
+  border-color: #73879a;
+  color: #d6e1eb;
+}
+
 .bands-row {
   display: inline-flex;
   align-items: center;

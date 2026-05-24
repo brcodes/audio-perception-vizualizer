@@ -23,6 +23,12 @@ const PEAK_HEIGHT_FACTOR = 0.527;
 // model: IACC ≈ cos(θ) for a lateral point source, so ASW ∝ (1-cos(θ)); 0.18 keeps the effect
 // perceptually meaningful without exaggerating moderately panned material.
 const BINAURAL_PAN_MAX_FLEX = 0.18;
+// Compressed period-ratio model for band base width.
+// Period ∝ 1/f; the 20Hz:20kHz period ratio is 1000:1 (untenable direct visual mapping).
+// Compressing by exponent 1/5 yields a 4:1 visual ratio: bass 4× wider than treble.
+// W0 sets the half-width factor at 20 Hz (fraction of the display radius).
+const WIDTH_W0 = 0.10;
+const WIDTH_COMPRESSION = 0.2; // α = 1/5
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
 // -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
@@ -339,10 +345,12 @@ function computeBinauralPanFlex(absPan) {
   return BINAURAL_PAN_MAX_FLEX * (1 - Math.cos(absPan * Math.PI / 2));
 }
 
-// Psychoacoustic localization spread: low frequencies are harder to localize (wider),
-// high frequencies are tighter.
+// Compressed period-ratio width: widthFactor = W0 × (1/1000)^(α × logT).
+// Anchors: 20 Hz → 0.100, ~630 Hz → 0.063, ~2 kHz → 0.040, 20 kHz → 0.025.
+// The curve follows the compressed acoustic period of each frequency band,
+// so bass waveforms appear proportionally wider than treble, mirroring cycle length.
 function frequencyToWidthFactor(logT) {
-  return 0.08 - 0.04 * logT; // 0.08 at 20Hz → 0.04 at 20kHz
+  return WIDTH_W0 * Math.pow(1000, -WIDTH_COMPRESSION * logT);
 }
 
 function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint, sweepT) {

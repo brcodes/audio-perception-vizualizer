@@ -20,27 +20,13 @@
           <button class="nudge-btn" data-target="panScaleSlider" data-dir="1" tabindex="-1" aria-label="Increase pan scale">+</button>
         </span>
         <input id="panScaleValue" type="number" min="0.10" max="0.80" step="0.01" value="0.14" class="ctrl-value-input" aria-label="Pan scale value" />
-        <label for="opacityCurvatureSlider" class="ctrl-label">Opacity Curvature, Z-axis</label>
+        <label for="lineAlphaSlider" class="ctrl-label">Line Alpha</label>
         <span class="slider-row">
-          <button class="nudge-btn" data-target="opacityCurvatureSlider" data-dir="-1" tabindex="-1" aria-label="Decrease opacity curvature">−</button>
-          <input id="opacityCurvatureSlider" type="range" min="-10" max="10" value="-5.5" step="0.1" class="ctrl-slider" aria-label="Opacity curvature Z-axis" />
-          <button class="nudge-btn" data-target="opacityCurvatureSlider" data-dir="1" tabindex="-1" aria-label="Increase opacity curvature">+</button>
+          <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1" aria-label="Decrease line alpha">−</button>
+          <input id="lineAlphaSlider" type="range" min="0" max="1" value="0.85" step="0.01" class="ctrl-slider" aria-label="Waveform line alpha" />
+          <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase line alpha">+</button>
         </span>
-        <input id="opacityCurvatureValue" type="number" min="-10" max="10" step="0.1" value="-5.5" class="ctrl-value-input" aria-label="Opacity curvature value" />
-        <label for="minAlphaSlider" class="ctrl-label">Min Alpha</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="minAlphaSlider" data-dir="-1" tabindex="-1" aria-label="Decrease min alpha">−</button>
-          <input id="minAlphaSlider" type="range" min="0" max="1" value="0.06" step="0.01" class="ctrl-slider" aria-label="Minimum band alpha" />
-          <button class="nudge-btn" data-target="minAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase min alpha">+</button>
-        </span>
-        <input id="minAlphaValue" type="number" min="0" max="1" step="0.01" value="0.06" class="ctrl-value-input" aria-label="Min alpha value" />
-        <label for="maxAlphaSlider" class="ctrl-label">Max Alpha</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="maxAlphaSlider" data-dir="-1" tabindex="-1" aria-label="Decrease max alpha">−</button>
-          <input id="maxAlphaSlider" type="range" min="0" max="1" value="1.00" step="0.01" class="ctrl-slider" aria-label="Maximum band alpha" />
-          <button class="nudge-btn" data-target="maxAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase max alpha">+</button>
-        </span>
-        <input id="maxAlphaValue" type="number" min="0" max="1" step="0.01" value="1.00" class="ctrl-value-input" aria-label="Max alpha value" />
+        <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="0.85" class="ctrl-value-input" aria-label="Line alpha value" />
         <label for="bassCurveSlider" class="ctrl-label">Bass Curve</label>
         <span class="slider-row">
           <button class="nudge-btn" data-target="bassCurveSlider" data-dir="-1" tabindex="-1" aria-label="Decrease bass curve">−</button>

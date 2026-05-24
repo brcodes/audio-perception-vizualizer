@@ -6,12 +6,8 @@ const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
 const panScaleSlider = document.getElementById('panScaleSlider');
 const panScaleValueEl = document.getElementById('panScaleValue');
-const opacityCurvatureSlider = document.getElementById('opacityCurvatureSlider');
-const opacityCurvatureValueEl = document.getElementById('opacityCurvatureValue');
-const minAlphaSlider = document.getElementById('minAlphaSlider');
-const minAlphaValueEl = document.getElementById('minAlphaValue');
-const maxAlphaSlider = document.getElementById('maxAlphaSlider');
-const maxAlphaValueEl = document.getElementById('maxAlphaValue');
+const lineAlphaSlider = document.getElementById('lineAlphaSlider');
+const lineAlphaValueEl = document.getElementById('lineAlphaValue');
 const bassCurveSlider = document.getElementById('bassCurveSlider');
 const bassCurveValueEl = document.getElementById('bassCurveValue');
 const trebleCurveSlider = document.getElementById('trebleCurveSlider');
@@ -43,25 +39,6 @@ const COLOR_STOPS = [
   { t: 1,      r: 75,  g: 46,  b: 255 },
 ];
 
-// Compute per-band alpha from drawing depth (0=back, 1=front) and the three opacity sliders.
-// Curvature e > 0: steep drop at back, flattens toward front.
-// Curvature e < 0: flat at back, steep drop toward front.
-// e = 0: linear.
-function computeAlpha(depth) {
-  const e = Number(opacityCurvatureSlider.value);
-  const minA = Number(minAlphaSlider.value);
-  const maxA = Number(maxAlphaSlider.value);
-  let t;
-  if (e > 0) {
-    t = 1 - Math.pow(depth, e);      // steep at front
-  } else if (e < 0) {
-    t = Math.pow(1 - depth, -e);     // steep at back
-  } else {
-    t = 1 - depth;                   // linear
-  }
-  return minA + (maxA - minA) * t;
-}
-
 function interpolateColor(t) {
   let i = 0;
   while (i < COLOR_STOPS.length - 2 && COLOR_STOPS[i + 1].t <= t) i += 1;
@@ -81,11 +58,7 @@ const FREQUENCIES = Array.from({ length: FREQ_COUNT }, (_, i) => {
   const logT = i / (FREQ_COUNT - 1);
   const hz = 20 * Math.pow(1000, logT);
   const rgb = interpolateColor(logT);
-  // Depth in drawing order: 0 = drawn first (back), 1 = drawn last (front).
-  // Bottom half (i<50): drawn 0→49, so front = i=49  → depth = i/49
-  // Top half   (i≥50): drawn 99→50, so front = i=50  → depth = (99-i)/49
-  const depth = i < 50 ? i / 49 : (99 - i) / 49;
-  return { hz, logT, rgb, depth };
+  return { hz, logT, rgb };
 });
 
 // Bottom semicircle: indices 0–49 (lower 50, 20Hz–~611Hz)
@@ -212,7 +185,7 @@ function frequencyToWidthFactor(logT) {
   return 0.08 - 0.04 * logT; // 0.08 at 20Hz → 0.04 at 20kHz
 }
 
-function drawWaveform({ centerX, centerY, radius, dir, rgb, alpha, energy, logT, panPoint }) {
+function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, energy, logT, panPoint }) {
   const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
   const height = radius * heightFactor;
 
@@ -229,18 +202,13 @@ function drawWaveform({ centerX, centerY, radius, dir, rgb, alpha, energy, logT,
   const maxX = Math.min(rightLimit, panX + halfWidth);
   const actualCenterX = (minX + maxX) / 2;
 
-  // Quadratic bezier: control point at 2× height ensures peak reaches exactly `height`.
-  // For a symmetric bezier B(t) with equal-y endpoints, the midpoint (t=0.5) reaches
-  // 50% of the control point's deviation — so we place it at 2× the desired peak.
-  // This gives a smooth parabolic bell visually indistinguishable from Gaussian for narrow spikes,
-  // with 3 path commands vs the previous 81-point loop.
-  ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+  // Draw only the waveform crest line; fill mode is intentionally disabled.
+  ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineAlpha})`;
+  ctx.lineWidth = 1.25;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
   ctx.quadraticCurveTo(actualCenterX, centerY + dir * height * 2, maxX, centerY);
-  ctx.lineTo(maxX, centerY);
-  ctx.closePath();
-  ctx.fill();
+  ctx.stroke();
 }
 
 function drawVisualizer() {
@@ -266,6 +234,7 @@ function drawVisualizer() {
   const sampleRate = audioContext?.sampleRate || 44100;
   const left = leftData || ZERO_FREQUENCY_DATA;
   const right = rightData || ZERO_FREQUENCY_DATA;
+  const lineAlpha = Number(lineAlphaSlider.value);
 
   ctx.save();
   ctx.beginPath();
@@ -279,8 +248,7 @@ function drawVisualizer() {
   ctx.rect(cx - radius, cy - radius, radius * 2, radius);
   ctx.clip();
   for (let i = TOP_FREQS.length - 1; i >= 0; i -= 1) {
-    const { hz, logT, rgb, depth } = TOP_FREQS[i];
-    const alpha = computeAlpha(depth);
+    const { hz, logT, rgb } = TOP_FREQS[i];
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const energy = (l + r) / 2;
@@ -298,7 +266,7 @@ function drawVisualizer() {
       radius,
       dir: -1,
       rgb,
-      alpha,
+      lineAlpha,
       energy: displayEnergy,
       logT,
       panPoint: panSmoothed[globalIdx],
@@ -312,8 +280,7 @@ function drawVisualizer() {
   ctx.beginPath();
   ctx.rect(cx - radius, cy, radius * 2, radius);
   ctx.clip();
-  BOTTOM_FREQS.forEach(({ hz, logT, rgb, depth }, i) => {
-    const alpha = computeAlpha(depth);
+  BOTTOM_FREQS.forEach(({ hz, logT, rgb }, i) => {
     const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
     const energy = (l + r) / 2;
@@ -330,7 +297,7 @@ function drawVisualizer() {
       radius,
       dir: 1,
       rgb,
-      alpha,
+      lineAlpha,
       energy: displayEnergy,
       logT,
       panPoint: panSmoothed[i],
@@ -493,9 +460,7 @@ function makeSliderPair(slider, field, min, max, decimals) {
   });
 }
 
-makeSliderPair(opacityCurvatureSlider, opacityCurvatureValueEl, -10, 10, 1);
-makeSliderPair(minAlphaSlider, minAlphaValueEl, 0, 1, 2);
-makeSliderPair(maxAlphaSlider, maxAlphaValueEl, 0, 1, 2);
+makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
 makeSliderPair(bassCurveSlider, bassCurveValueEl, 0.50, 3.00, 1);
 makeSliderPair(trebleCurveSlider, trebleCurveValueEl, 0.20, 1.50, 1);
 

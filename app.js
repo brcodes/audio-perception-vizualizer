@@ -14,6 +14,7 @@ const bassCurveSlider = document.getElementById('bassCurveSlider');
 const bassCurveValueEl = document.getElementById('bassCurveValue');
 const trebleCurveSlider = document.getElementById('trebleCurveSlider');
 const trebleCurveValueEl = document.getElementById('trebleCurveValue');
+const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
@@ -24,6 +25,10 @@ const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
 // Tiny center deadband keeps front-center visually stable against micro L/R noise.
 const PAN_CENTER_DEADBAND_POINTS = 0.6;
+const PAN_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
+const PAN_DISPLAY_LINE_WIDTH = 1;
+const PAN_DISPLAY_NOTCH_HALF_HEIGHT = 4;
+const PAN_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
 
 const FREQ_COUNT = 100;
 // Half-bin ratio for constant-Q narrow bands: ±half a log-bin around each center frequency
@@ -88,6 +93,7 @@ let rightData;
 let isDocumentHidden = false;
 let isScrubbing = false;
 let wasPlaying = false;
+let isPanDisplayLineVisible = true;
 
 function formatTime(seconds) {
   if (!isFinite(seconds) || seconds < 0) return '0:00';
@@ -218,6 +224,31 @@ function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth
   ctx.stroke();
 }
 
+function drawPanDisplayLine(centerX, centerY, radius) {
+  ctx.strokeStyle = PAN_DISPLAY_LINE_COLOR;
+  ctx.lineWidth = PAN_DISPLAY_LINE_WIDTH;
+  ctx.beginPath();
+  ctx.moveTo(centerX - radius, centerY);
+  ctx.lineTo(centerX + radius, centerY);
+  for (let panPoint = -100; panPoint <= 100; panPoint += 1) {
+    const absPanPoint = Math.abs(panPoint);
+    const isHighNotch =
+      absPanPoint === 0 ||
+      absPanPoint === 20 ||
+      absPanPoint === 40 ||
+      absPanPoint === 60 ||
+      absPanPoint === 80 ||
+      absPanPoint === 100;
+    const notchHalfHeight = isHighNotch
+      ? PAN_DISPLAY_NOTCH_HALF_HEIGHT
+      : PAN_DISPLAY_NOTCH_HALF_HEIGHT * PAN_DISPLAY_MINOR_NOTCH_SCALE;
+    const x = centerX + (panPoint / 100) * radius;
+    ctx.moveTo(x, centerY - notchHalfHeight);
+    ctx.lineTo(x, centerY + notchHalfHeight);
+  }
+  ctx.stroke();
+}
+
 function drawVisualizer() {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -318,6 +349,10 @@ function drawVisualizer() {
   });
   ctx.restore();
 
+  if (isPanDisplayLineVisible) {
+    drawPanDisplayLine(cx, cy, radius);
+  }
+
   ctx.restore();
 }
 
@@ -390,7 +425,17 @@ async function togglePlayPause() {
   }
 }
 
+function updatePanLineToggleState() {
+  togglePanLineBtn.textContent = isPanDisplayLineVisible ? 'Pan Line: On' : 'Pan Line: Off';
+  togglePanLineBtn.classList.toggle('is-active', isPanDisplayLineVisible);
+}
+
 playPauseBtn.addEventListener('click', () => togglePlayPause());
+togglePanLineBtn.addEventListener('click', () => {
+  isPanDisplayLineVisible = !isPanDisplayLineVisible;
+  updatePanLineToggleState();
+  drawVisualizer();
+});
 
 let isPointerOverApp = false;
 const appEl = document.querySelector('.app');
@@ -519,6 +564,7 @@ window.addEventListener('resize', () => {
   drawVisualizer();
 });
 
+updatePanLineToggleState();
 resizeCanvas();
 drawVisualizer();
 

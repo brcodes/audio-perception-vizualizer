@@ -49,6 +49,21 @@ body {
   padding: 0.45rem 0.65rem;
 }
 
+.toggle-btn {
+  font-size: 0.78rem;
+  white-space: nowrap;
+  min-width: 6.5rem;
+  background: #2f3944;
+  border-color: #54606d;
+  color: #e8edf2;
+}
+
+.toggle-btn:not(.is-active) {
+  background: #121820;
+  border-color: #3e4955;
+  color: #8a9baa;
+}
+
 .seekbar {
   display: flex;
   align-items: center;

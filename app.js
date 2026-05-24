@@ -22,6 +22,8 @@ const TYPICAL_HEIGHT_FACTOR = 0.7;
 const PEAK_HEIGHT_FACTOR = 0.97;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
+// Tiny center deadband keeps front-center visually stable against micro L/R noise.
+const PAN_CENTER_DEADBAND_POINTS = 0.6;
 
 const FREQ_COUNT = 100;
 // Half-bin ratio for constant-Q narrow bands: ±half a log-bin around each center frequency
@@ -159,7 +161,8 @@ const panSmoothed = new Float32Array(FREQ_COUNT);
 function toPanPoint(left, right) {
   if (left + right < 0.015) return 0;
   const scale = Number(panScaleSlider.value);
-  return Math.max(-100, Math.min(100, Math.round(((right - left) / scale) * 100)));
+  const panPoint = Math.max(-100, Math.min(100, ((right - left) / scale) * 100));
+  return Math.abs(panPoint) < PAN_CENTER_DEADBAND_POINTS ? 0 : panPoint;
 }
 
 function amplitudeToHeightFactor(energy) {

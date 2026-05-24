@@ -312,18 +312,17 @@ function drawVisualizer() {
 
   const cx = width / 2;
   const cy = height / 2;
-  const radius = Math.min(width, height) * 0.42;
+  const halfSize = Math.min(width, height) * 0.42;
+  const squareSize = halfSize * 2;
 
   ctx.fillStyle = '#161d25';
   ctx.fillRect(0, 0, width, height);
 
   ctx.fillStyle = '#0f141a';
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(cx - halfSize, cy - halfSize, squareSize, squareSize);
   ctx.strokeStyle = '#3c4752';
   ctx.lineWidth = 2;
-  ctx.stroke();
+  ctx.strokeRect(cx - halfSize, cy - halfSize, squareSize, squareSize);
 
   const sampleRate = audioContext?.sampleRate || 44100;
   const left = leftData || ZERO_FREQUENCY_DATA;
@@ -338,13 +337,13 @@ function drawVisualizer() {
 
   ctx.save();
   ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.rect(cx - halfSize, cy - halfSize, squareSize, squareSize);
   ctx.clip();
 
-  // Top semicircle: upper bands drawn highest->lowest to keep the equator boundary prominent.
+  // Top half: upper bands drawn highest->lowest to keep the center boundary prominent.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(cx - radius, cy - radius, radius * 2, radius);
+  ctx.rect(cx - halfSize, cy - halfSize, squareSize, halfSize);
   ctx.clip();
   for (let i = topBands.length - 1; i >= 0; i -= 1) {
     const band = topBands[i];
@@ -362,7 +361,7 @@ function drawVisualizer() {
     drawWaveform({
       centerX: cx,
       centerY: cy,
-      radius,
+      radius: halfSize,
       dir: -1,
       rgb: band.rgb,
       lineAlpha,
@@ -375,10 +374,10 @@ function drawVisualizer() {
   }
   ctx.restore();
 
-  // Bottom semicircle: lower bands drawn lowest->highest for symmetric layering.
+  // Bottom half: lower bands drawn lowest->highest for symmetric layering.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(cx - radius, cy, radius * 2, radius);
+  ctx.rect(cx - halfSize, cy, squareSize, halfSize);
   ctx.clip();
   for (let i = 0; i < bottomBands.length; i += 1) {
     const band = bottomBands[i];
@@ -395,7 +394,7 @@ function drawVisualizer() {
     drawWaveform({
       centerX: cx,
       centerY: cy,
-      radius,
+      radius: halfSize,
       dir: 1,
       rgb: band.rgb,
       lineAlpha,
@@ -409,7 +408,7 @@ function drawVisualizer() {
   ctx.restore();
 
   if (isPanDisplayLineVisible) {
-    drawPanDisplayLine(cx, cy, radius);
+    drawPanDisplayLine(cx, cy, halfSize);
   }
 
   ctx.restore();

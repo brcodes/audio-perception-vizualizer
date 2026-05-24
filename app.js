@@ -10,11 +10,8 @@ const lineAlphaSlider = document.getElementById('lineAlphaSlider');
 const lineAlphaValueEl = document.getElementById('lineAlphaValue');
 const lineThicknessSlider = document.getElementById('lineThicknessSlider');
 const lineThicknessValueEl = document.getElementById('lineThicknessValue');
-const bassCurveSlider = document.getElementById('bassCurveSlider');
-const bassCurveValueEl = document.getElementById('bassCurveValue');
-const trebleCurveSlider = document.getElementById('trebleCurveSlider');
-const trebleCurveValueEl = document.getElementById('trebleCurveValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
+const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
@@ -29,10 +26,17 @@ const PAN_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const PAN_DISPLAY_LINE_WIDTH = 1;
 const PAN_DISPLAY_NOTCH_HALF_HEIGHT = 4;
 const PAN_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
+// Fixed transient mapping removes per-band curve styling for a more uniform waveform language.
+const TRANSIENT_ENERGY_EXPONENT = 0.78;
+// Right-to-left sweep speed (cycles/sec) makes crest peaks read as transients crossing a window.
+const TRANSIENT_SWEEP_HZ = 1.35;
+const TRANSIENT_SKEW_MIN = 0.2;
+const TRANSIENT_SKEW_MAX = 0.82;
 
-const FREQ_COUNT = 100;
-// Half-bin ratio for constant-Q narrow bands: ±half a log-bin around each center frequency
-const HALF_BIN_RATIO = Math.pow(1000, 0.5 / (FREQ_COUNT - 1));
+const MIN_AUDIBLE_HZ = 20;
+const MAX_AUDIBLE_HZ = 20000;
+const BAND_MODE_KEYS = Object.freeze([7, 15, 25]);
+const DEFAULT_BAND_MODE = 25;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -50,6 +54,16 @@ const COLOR_STOPS = [
   { t: 1,      r: 75,  g: 46,  b: 255 },
 ];
 
+const SEVEN_BAND_BINS = [
+  { minHz: 20, maxHz: 60, hz: 34.6, rgb: { r: 88, g: 0, b: 0 } },
+  { minHz: 60, maxHz: 250, hz: 122.5, rgb: { r: 255, g: 46, b: 0 } },
+  { minHz: 250, maxHz: 500, hz: 353.6, rgb: { r: 255, g: 140, b: 0 } },
+  { minHz: 500, maxHz: 2000, hz: 1000, rgb: { r: 255, g: 235, b: 0 } },
+  { minHz: 2000, maxHz: 4000, hz: 2828.4, rgb: { r: 102, g: 204, b: 0 } },
+  { minHz: 4000, maxHz: 6000, hz: 4898.9, rgb: { r: 0, g: 204, b: 221 } },
+  { minHz: 6000, maxHz: 20000, hz: 10954.5, rgb: { r: 75, g: 46, b: 255 } },
+];
+
 function interpolateColor(t) {
   let i = 0;
   while (i < COLOR_STOPS.length - 2 && COLOR_STOPS[i + 1].t <= t) i += 1;
@@ -63,19 +77,61 @@ function interpolateColor(t) {
   };
 }
 
-// 100 log-spaced frequencies from 20Hz (logT=0) to 20kHz (logT=1).
-// Geometric midpoint ~632Hz falls at index 49/50 — bottom half shows 20–632Hz, top shows 632–20kHz.
-const FREQUENCIES = Array.from({ length: FREQ_COUNT }, (_, i) => {
-  const logT = i / (FREQ_COUNT - 1);
-  const hz = 20 * Math.pow(1000, logT);
-  const rgb = interpolateColor(logT);
-  return { hz, logT, rgb };
-});
+function hzToLogT(hz) {
+  const ratio = MAX_AUDIBLE_HZ / MIN_AUDIBLE_HZ;
+  return Math.log(hz / MIN_AUDIBLE_HZ) / Math.log(ratio);
+}
 
-// Bottom semicircle: indices 0–49 (lower 50, 20Hz–~611Hz)
-const BOTTOM_FREQS = FREQUENCIES.slice(0, 50);
-// Top semicircle: indices 50–99 (upper 50, ~655Hz–20kHz)
-const TOP_FREQS = FREQUENCIES.slice(50);
+function createLogBands(count) {
+  const ratio = MAX_AUDIBLE_HZ / MIN_AUDIBLE_HZ;
+  // Constant-Q spread keeps proportional bandwidth per band across the audible range.
+  const halfBinRatio = Math.pow(ratio, 0.5 / (count - 1));
+  const bands = new Array(count);
+
+  for (let i = 0; i < count; i += 1) {
+    const logT = i / (count - 1);
+    const hz = MIN_AUDIBLE_HZ * Math.pow(ratio, logT);
+    bands[i] = {
+      hz,
+      logT,
+      rgb: interpolateColor(logT),
+      minHz: Math.max(MIN_AUDIBLE_HZ, hz / halfBinRatio),
+      maxHz: Math.min(MAX_AUDIBLE_HZ, hz * halfBinRatio),
+    };
+  }
+
+  // Force edge bins to cover the full 20Hz-20kHz range without leaving gaps.
+  bands[0].minHz = MIN_AUDIBLE_HZ;
+  bands[count - 1].maxHz = MAX_AUDIBLE_HZ;
+
+  return bands;
+}
+
+function createBandProfile(bands) {
+  const splitIndex = Math.floor(bands.length / 2);
+  return {
+    splitIndex,
+    bottomBands: bands.slice(0, splitIndex),
+    topBands: bands.slice(splitIndex),
+    // Per-band smoothed pan state persists across frames for temporal stability.
+    panSmoothed: new Float32Array(bands.length),
+  };
+}
+
+const BAND_PROFILES = {
+  7: createBandProfile(SEVEN_BAND_BINS.map((band) => ({
+    minHz: band.minHz,
+    maxHz: band.maxHz,
+    hz: band.hz,
+    logT: hzToLogT(band.hz),
+    rgb: band.rgb,
+  }))),
+  15: createBandProfile(createLogBands(15)),
+  25: createBandProfile(createLogBands(25)),
+};
+
+let activeBandMode = DEFAULT_BAND_MODE;
+let activeBandProfile = BAND_PROFILES[activeBandMode];
 
 const audio = new Audio();
 audio.crossOrigin = 'anonymous';
@@ -155,10 +211,6 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
   return count ? Math.sqrt(sumSq / count) : 0;
 }
 
-// Per-band smoothed pan state — persists across frames for temporal stability.
-// Indices 0–49 = BOTTOM_FREQS, 50–99 = TOP_FREQS.
-const panSmoothed = new Float32Array(FREQ_COUNT);
-
 // Use the absolute L–R difference rather than the relative ratio (R-L)/(R+L).
 // Relative normalization causes pan to collapse toward center whenever centered
 // content is added to a band, because it grows the denominator without changing
@@ -183,22 +235,22 @@ function amplitudeToHeightFactor(energy) {
   );
 }
 
-// Height-shape exponent interpolated by log-frequency.
-// Bass (logT=0): expLow > 1 compresses energy → short, round hills.
-// Treble (logT=1): expHigh < 1 expands energy → tall, sharp spikes.
-function frequencyToHeightExponent(logT) {
-  const expLow = Number(bassCurveSlider.value);
-  const expHigh = Number(trebleCurveSlider.value);
-  return expLow + (expHigh - expLow) * logT;
+function shapeEnergyForTransientView(energy) {
+  return Math.min(1, Math.pow(Math.max(0, energy), TRANSIENT_ENERGY_EXPONENT));
+}
+
+function computeTransientSweepT() {
+  const t = (audio.currentTime * TRANSIENT_SWEEP_HZ) % 1;
+  return t < 0 ? t + 1 : t;
 }
 
 // Psychoacoustic localization spread: low frequencies are harder to localize (wider),
-// high frequencies are tighter. Scaled down for 100 narrow bands.
+// high frequencies are tighter.
 function frequencyToWidthFactor(logT) {
   return 0.08 - 0.04 * logT; // 0.08 at 20Hz → 0.04 at 20kHz
 }
 
-function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint }) {
+function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint, sweepT }) {
   const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
   const height = radius * heightFactor;
 
@@ -213,14 +265,18 @@ function drawWaveform({ centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth
   const panX = centerX + (panPoint / 100) * radius;
   const minX = Math.max(leftLimit, panX - halfWidth);
   const maxX = Math.min(rightLimit, panX + halfWidth);
-  const actualCenterX = (minX + maxX) / 2;
+  const width = maxX - minX;
+  const transientSkew = TRANSIENT_SKEW_MAX - sweepT * (TRANSIENT_SKEW_MAX - TRANSIENT_SKEW_MIN);
+  const transientPeakX = minX + width * transientSkew;
+  const shoulderX = minX + width * 0.45;
 
-  // Draw only the waveform crest line; fill mode is intentionally disabled.
+  // Asymmetric crest with a drifting peak reads like transients moving right→left.
   ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineAlpha})`;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
-  ctx.quadraticCurveTo(actualCenterX, centerY + dir * height * 2, maxX, centerY);
+  ctx.quadraticCurveTo(shoulderX, centerY + dir * height * 0.95, transientPeakX, centerY + dir * height * 1.8);
+  ctx.quadraticCurveTo(maxX - width * 0.08, centerY + dir * height * 1.15, maxX, centerY);
   ctx.stroke();
 }
 
@@ -273,29 +329,30 @@ function drawVisualizer() {
   const left = leftData || ZERO_FREQUENCY_DATA;
   const right = rightData || ZERO_FREQUENCY_DATA;
   const lineAlpha = Number(lineAlphaSlider.value);
+  const sweepT = computeTransientSweepT();
   // Keep visual continuity: slider value 0.70 reproduces the prior fixed 1.25px line width.
   const lineWidth =
     (Math.max(0.01, Number(lineThicknessSlider.value)) / BASE_LINE_THICKNESS_CONTROL) *
     BASE_LINE_WIDTH_PX;
+  const { topBands, bottomBands, splitIndex, panSmoothed } = activeBandProfile;
 
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.clip();
 
-  // Top semicircle: upper 50 frequencies, drawn highest→lowest so that the
-  // boundary frequency (~655Hz, index 50) is painted last and visually prominent at equator.
+  // Top semicircle: upper bands drawn highest->lowest to keep the equator boundary prominent.
   ctx.save();
   ctx.beginPath();
   ctx.rect(cx - radius, cy - radius, radius * 2, radius);
   ctx.clip();
-  for (let i = TOP_FREQS.length - 1; i >= 0; i -= 1) {
-    const { hz, logT, rgb } = TOP_FREQS[i];
-    const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
-    const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
+  for (let i = topBands.length - 1; i >= 0; i -= 1) {
+    const band = topBands[i];
+    const l = getBandEnergy(left, band.minHz, band.maxHz, sampleRate);
+    const r = getBandEnergy(right, band.minHz, band.maxHz, sampleRate);
     const energy = (l + r) / 2;
-    const displayEnergy = Math.min(1, Math.pow(energy, frequencyToHeightExponent(logT)));
-    const globalIdx = 50 + i;
+    const displayEnergy = shapeEnergyForTransientView(energy);
+    const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
     if (energy > 0.02) {
       panSmoothed[globalIdx] = panSmoothed[globalIdx] * 0.85 + rawPan * 0.15;
@@ -307,27 +364,28 @@ function drawVisualizer() {
       centerY: cy,
       radius,
       dir: -1,
-      rgb,
+      rgb: band.rgb,
       lineAlpha,
       lineWidth,
       energy: displayEnergy,
-      logT,
+      logT: band.logT,
       panPoint: panSmoothed[globalIdx],
+      sweepT,
     });
   }
   ctx.restore();
 
-  // Bottom semicircle: lower 50 frequencies, drawn lowest→highest so that the
-  // boundary frequency (~611Hz, index 49) is painted last and visually prominent at equator.
+  // Bottom semicircle: lower bands drawn lowest->highest for symmetric layering.
   ctx.save();
   ctx.beginPath();
   ctx.rect(cx - radius, cy, radius * 2, radius);
   ctx.clip();
-  BOTTOM_FREQS.forEach(({ hz, logT, rgb }, i) => {
-    const l = getBandEnergy(left, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
-    const r = getBandEnergy(right, hz / HALF_BIN_RATIO, hz * HALF_BIN_RATIO, sampleRate);
+  for (let i = 0; i < bottomBands.length; i += 1) {
+    const band = bottomBands[i];
+    const l = getBandEnergy(left, band.minHz, band.maxHz, sampleRate);
+    const r = getBandEnergy(right, band.minHz, band.maxHz, sampleRate);
     const energy = (l + r) / 2;
-    const displayEnergy = Math.min(1, Math.pow(energy, frequencyToHeightExponent(logT)));
+    const displayEnergy = shapeEnergyForTransientView(energy);
     const rawPan = toPanPoint(l, r);
     if (energy > 0.02) {
       panSmoothed[i] = panSmoothed[i] * 0.85 + rawPan * 0.15;
@@ -339,14 +397,15 @@ function drawVisualizer() {
       centerY: cy,
       radius,
       dir: 1,
-      rgb,
+      rgb: band.rgb,
       lineAlpha,
       lineWidth,
       energy: displayEnergy,
-      logT,
+      logT: band.logT,
       panPoint: panSmoothed[i],
+      sweepT,
     });
-  });
+  }
   ctx.restore();
 
   if (isPanDisplayLineVisible) {
@@ -430,12 +489,36 @@ function updatePanLineToggleState() {
   togglePanLineBtn.classList.toggle('is-active', isPanDisplayLineVisible);
 }
 
+function updateBandModeButtons() {
+  for (let i = 0; i < bandModeButtons.length; i += 1) {
+    const button = bandModeButtons[i];
+    const bandCount = Number(button.dataset.bandCount);
+    const isActive = bandCount === activeBandMode;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  }
+}
+
+function setBandMode(nextMode) {
+  if (!BAND_MODE_KEYS.includes(nextMode) || nextMode === activeBandMode) return;
+  activeBandMode = nextMode;
+  activeBandProfile = BAND_PROFILES[nextMode];
+  updateBandModeButtons();
+  drawVisualizer();
+}
+
 playPauseBtn.addEventListener('click', () => togglePlayPause());
 togglePanLineBtn.addEventListener('click', () => {
   isPanDisplayLineVisible = !isPanDisplayLineVisible;
   updatePanLineToggleState();
   drawVisualizer();
 });
+for (let i = 0; i < bandModeButtons.length; i += 1) {
+  const button = bandModeButtons[i];
+  button.addEventListener('click', () => {
+    setBandMode(Number(button.dataset.bandCount));
+  });
+}
 
 let isPointerOverApp = false;
 const appEl = document.querySelector('.app');
@@ -520,8 +603,6 @@ function makeSliderPair(slider, field, min, max, decimals) {
 
 makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
 makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
-makeSliderPair(bassCurveSlider, bassCurveValueEl, 0.50, 3.00, 1);
-makeSliderPair(trebleCurveSlider, trebleCurveValueEl, 0.20, 1.50, 1);
 
 // Nudge buttons: step a slider by one unit in either direction.
 document.addEventListener('click', (e) => {
@@ -565,6 +646,7 @@ window.addEventListener('resize', () => {
 });
 
 updatePanLineToggleState();
+updateBandModeButtons();
 resizeCanvas();
 drawVisualizer();
 

@@ -64,6 +64,18 @@ body {
   color: #8a9baa;
 }
 
+.bands-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.band-mode-btn {
+  min-width: 2.35rem;
+  padding: 0.35rem 0.45rem;
+  text-align: center;
+}
+
 .seekbar {
   display: flex;
   align-items: center;

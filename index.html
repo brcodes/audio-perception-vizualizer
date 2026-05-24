@@ -14,6 +14,12 @@
         <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
         <button id="playPauseBtn" type="button" disabled>Play</button>
         <button id="togglePanLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle pan display line">Pan Line: On</button>
+        <span class="ctrl-label">Bands</span>
+        <span class="bands-row" role="group" aria-label="Visualizer band count">
+          <button id="bands7Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="7" aria-label="Use seven frequency bands" aria-pressed="false">7</button>
+          <button id="bands15Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="15" aria-label="Use fifteen frequency bands" aria-pressed="false">15</button>
+          <button id="bands25Btn" type="button" class="toggle-btn band-mode-btn is-active" data-band-count="25" aria-label="Use twenty five frequency bands" aria-pressed="true">25</button>
+        </span>
         <label for="panScaleSlider" class="ctrl-label">Pan Scale</label>
         <span class="slider-row">
           <button class="nudge-btn" data-target="panScaleSlider" data-dir="-1" tabindex="-1" aria-label="Decrease pan scale">−</button>
@@ -24,31 +30,17 @@
         <label for="lineAlphaSlider" class="ctrl-label">Line Alpha</label>
         <span class="slider-row">
           <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1" aria-label="Decrease line alpha">−</button>
-          <input id="lineAlphaSlider" type="range" min="0" max="1" value="0.85" step="0.01" class="ctrl-slider" aria-label="Waveform line alpha" />
+          <input id="lineAlphaSlider" type="range" min="0" max="1" value="1.00" step="0.01" class="ctrl-slider" aria-label="Waveform line alpha" />
           <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase line alpha">+</button>
         </span>
-        <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="0.85" class="ctrl-value-input" aria-label="Line alpha value" />
+        <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="1.00" class="ctrl-value-input" aria-label="Line alpha value" />
         <label for="lineThicknessSlider" class="ctrl-label">Line Thickness</label>
         <span class="slider-row">
           <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="-1" tabindex="-1" aria-label="Decrease line thickness">−</button>
-          <input id="lineThicknessSlider" type="range" min="0.01" max="1.0" value="0.70" step="0.01" class="ctrl-slider" aria-label="Waveform line thickness" />
+          <input id="lineThicknessSlider" type="range" min="0.01" max="1.0" value="0.10" step="0.01" class="ctrl-slider" aria-label="Waveform line thickness" />
           <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="1" tabindex="-1" aria-label="Increase line thickness">+</button>
         </span>
-        <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.70" class="ctrl-value-input" aria-label="Line thickness value" />
-        <label for="bassCurveSlider" class="ctrl-label">Bass Curve</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="bassCurveSlider" data-dir="-1" tabindex="-1" aria-label="Decrease bass curve">−</button>
-          <input id="bassCurveSlider" type="range" min="0.50" max="3.00" value="2.70" step="0.1" class="ctrl-slider" aria-label="Bass height curve exponent" />
-          <button class="nudge-btn" data-target="bassCurveSlider" data-dir="1" tabindex="-1" aria-label="Increase bass curve">+</button>
-        </span>
-        <input id="bassCurveValue" type="number" min="0.50" max="3.00" step="0.1" value="2.70" class="ctrl-value-input" aria-label="Bass curve value" />
-        <label for="trebleCurveSlider" class="ctrl-label">Treble Curve</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="trebleCurveSlider" data-dir="-1" tabindex="-1" aria-label="Decrease treble curve">−</button>
-          <input id="trebleCurveSlider" type="range" min="0.20" max="2.70" value="0.50" step="0.1" class="ctrl-slider" aria-label="Treble height curve exponent" />
-          <button class="nudge-btn" data-target="trebleCurveSlider" data-dir="1" tabindex="-1" aria-label="Increase treble curve">+</button>
-        </span>
-        <input id="trebleCurveValue" type="number" min="0.20" max="2.70" step="0.1" value="0.50" class="ctrl-value-input" aria-label="Treble curve value" />
+        <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.10" class="ctrl-value-input" aria-label="Line thickness value" />
       </section>
       <section class="seekbar">
         <span id="currentTime">0:00</span>

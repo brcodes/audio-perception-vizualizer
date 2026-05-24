@@ -12,12 +12,17 @@ const lineThicknessSlider = document.getElementById('lineThicknessSlider');
 const lineThicknessValueEl = document.getElementById('lineThicknessValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
+const binauralPanBtn = document.getElementById('binauralPanBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
 // Full-scale band energy maps linearly to 52.7% of half-frame height to preserve amplitude proportion.
 const PEAK_HEIGHT_FACTOR = 0.527;
+// Max binaural pan spread bonus at full pan (±100). Derived from the (1-cosθ) apparent-source-width
+// model: IACC ≈ cos(θ) for a lateral point source, so ASW ∝ (1-cos(θ)); 0.18 keeps the effect
+// perceptually meaningful without exaggerating moderately panned material.
+const BINAURAL_PAN_MAX_FLEX = 0.18;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
 // -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
@@ -161,6 +166,7 @@ let isDocumentHidden = false;
 let isScrubbing = false;
 let wasPlaying = false;
 let isPanDisplayLineVisible = true;
+let isBinauralPanDisplayActive = false;
 let isHeightNormalized = false;
 let isHeightNormalizationCalibrating = false;
 let currentFile;
@@ -323,6 +329,16 @@ function computeTransientSweepT() {
   return t < 0 ? t + 1 : t;
 }
 
+// Binaural apparent-source-width model (ASW):
+// For a lateral point source, IACC ≈ cos(θ), so perceived source width grows as (1 - cos(θ)).
+// Pan 0–100 maps to azimuth 0°–90°: θ = absPan × π/2 (absPan = |panPoint|/100, range 0–1).
+// Sub-integer pan values (e.g. 50.3) resolve naturally through the cosine — no lookup needed.
+//   pan  0 → flex 0.000   pan 20 → flex 0.015
+//   pan 50 → flex 0.053   pan 70 → flex 0.098   pan 100 → flex 0.180
+function computeBinauralPanFlex(absPan) {
+  return BINAURAL_PAN_MAX_FLEX * (1 - Math.cos(absPan * Math.PI / 2));
+}
+
 // Psychoacoustic localization spread: low frequencies are harder to localize (wider),
 // high frequencies are tighter.
 function frequencyToWidthFactor(logT) {
@@ -336,8 +352,12 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
   const widthBase = frequencyToWidthFactor(logT);
   const levelBoost = 0.03 * energy;
   let halfWidth = radius * (widthBase + levelBoost);
-  const absPan = Math.abs(panPoint) / 100;
-  halfWidth *= 1 + absPan * 0.06;
+  // Off: no pan inflation — width driven purely by pitch and amplitude.
+  // On: (1-cosθ) binaural spread bonus; zero at center, max lateral wrap at ±100.
+  if (isBinauralPanDisplayActive) {
+    const absPan = Math.abs(panPoint) / 100;
+    halfWidth *= 1 + computeBinauralPanFlex(absPan);
+  }
 
   const leftLimit = centerX - radius - PAN_EDGE_BLEED_PX;
   const rightLimit = centerX + radius + PAN_EDGE_BLEED_PX;
@@ -627,6 +647,12 @@ function updatePanLineToggleState() {
   togglePanLineBtn.setAttribute('aria-pressed', isPanDisplayLineVisible ? 'true' : 'false');
 }
 
+function updateBinauralPanToggleState() {
+  binauralPanBtn.textContent = isBinauralPanDisplayActive ? 'Binaural Pan: On' : 'Binaural Pan: Off';
+  binauralPanBtn.classList.toggle('is-active', isBinauralPanDisplayActive);
+  binauralPanBtn.setAttribute('aria-pressed', isBinauralPanDisplayActive ? 'true' : 'false');
+}
+
 function updateBandModeButtons() {
   for (let i = 0; i < bandModeButtons.length; i += 1) {
     const button = bandModeButtons[i];
@@ -649,6 +675,11 @@ playPauseBtn.addEventListener('click', () => togglePlayPause());
 togglePanLineBtn.addEventListener('click', () => {
   isPanDisplayLineVisible = !isPanDisplayLineVisible;
   updatePanLineToggleState();
+  drawVisualizer();
+});
+binauralPanBtn.addEventListener('click', () => {
+  isBinauralPanDisplayActive = !isBinauralPanDisplayActive;
+  updateBinauralPanToggleState();
   drawVisualizer();
 });
 normalizeHeightBtn.addEventListener('click', () => {

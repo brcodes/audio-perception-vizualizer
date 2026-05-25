@@ -500,10 +500,11 @@ function drawVisualizer() {
     const displayEnergy = energy;
     const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
-    if (energy > 0.02) {
+    // Use the same activity floor as toPanPoint (l+r≥0.015) so any band with a valid
+    // pan reading is tracked rather than decayed — prevents low-energy treble bands
+    // with hard pans from collapsing to center between transients.
+    if (l + r > 0.015) {
       panSmoothed[globalIdx] = panSmoothed[globalIdx] * 0.85 + rawPan * 0.15;
-    } else {
-      panSmoothed[globalIdx] *= 0.92; // decay toward center when band is silent
     }
     drawWaveform(
       cx,
@@ -533,10 +534,11 @@ function drawVisualizer() {
     const energy = (l + r) / 2;
     const displayEnergy = energy;
     const rawPan = toPanPoint(l, r);
-    if (energy > 0.02) {
+    // Use the same activity floor as toPanPoint (l+r≥0.015) so any band with a valid
+    // pan reading is tracked rather than decayed — prevents low-energy treble bands
+    // with hard pans from collapsing to center between transients.
+    if (l + r > 0.015) {
       panSmoothed[i] = panSmoothed[i] * 0.85 + rawPan * 0.15;
-    } else {
-      panSmoothed[i] *= 0.92; // decay toward center when band is silent
     }
     drawWaveform(
       cx,
@@ -603,6 +605,7 @@ fileInput.addEventListener('change', async (event) => {
   ensureAudioGraph();
   if (audioContext.state === 'suspended') await audioContext.resume();
   applyFixedAnalyserScale();
+  for (const key of BAND_MODE_KEYS) BAND_PROFILES[key].panSmoothed.fill(0);
 
   if (objectUrl) URL.revokeObjectURL(objectUrl);
   objectUrl = URL.createObjectURL(file);

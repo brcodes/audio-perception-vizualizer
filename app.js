@@ -79,6 +79,9 @@ const DB_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const DB_DISPLAY_LINE_WIDTH = 1;
 const DB_DISPLAY_NOTCH_HALF_WIDTH = 4;
 const DB_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
+// Vertical bleed lets the dB edge labels at the top/bottom of the square straddle
+// the edge, mirroring how the pan labels at ±100 straddle the left/right edges.
+const DB_VERT_BLEED_PX = 8;
 
 const MIN_AUDIBLE_HZ = 20;
 const MAX_AUDIBLE_HZ = 20000;
@@ -461,6 +464,17 @@ function drawPanDisplayLine(centerX, centerY, radius) {
     ctx.lineTo(x, centerY + notchHalfHeight);
   }
   ctx.stroke();
+
+  // Numeric labels at major notches — skip 0 (origin handled by the shared coordinate pair label).
+  ctx.fillStyle = 'rgba(110, 110, 110, 0.75)';
+  ctx.font = '9px monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'center';
+  for (let panPoint = -100; panPoint <= 100; panPoint += 20) {
+    if (panPoint === 0) continue;
+    const x = centerX + (panPoint / 100) * radius;
+    ctx.fillText(panPoint.toString(), x, centerY + PAN_DISPLAY_NOTCH_HALF_HEIGHT + 2);
+  }
 }
 
 function drawDbDisplayLine(centerX, centerY, radius) {
@@ -494,20 +508,37 @@ function drawDbDisplayLine(centerX, centerY, radius) {
   }
   ctx.stroke();
 
-  // Numeric labels at each major notch — the actual dBFS a signal must reach to drive a waveform
-  // peak to this pixel height. Inverts: height = radius × energy × PEAK_HEIGHT_FACTOR × waveHeightScale,
-  // so energy = pixelFraction / (PEAK_HEIGHT_FACTOR × waveHeightScale). Clamped to [minDb, maxDb]
-  // because a low waveHeightScale can make the edge represent beyond-full-scale (impossible in practice).
+  // Numeric labels at each major notch — skip i=0; origin is shown as the shared coordinate pair.
   ctx.fillStyle = 'rgba(110, 110, 110, 0.75)';
   ctx.font = '9px monospace';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   for (let i = -100; i <= 100; i += 20) {
+    if (i === 0) continue;
     const energy = (Math.abs(i) / 100) / (PEAK_HEIGHT_FACTOR * waveHeightScale);
     const db = minDb + Math.min(1, energy) * dynamicRange;
     const y = centerY + (i / 100) * radius;
     ctx.fillText(Math.round(db).toString(), centerX + DB_DISPLAY_NOTCH_HALF_WIDTH + 3, y);
   }
+
+  // Origin label: top-right quadrant corner.
+  ctx.fillStyle = 'rgba(110, 110, 110, 0.75)';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  if (isPanDisplayLineVisible) {
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('(0, -100)', centerX + 3, centerY - 3);
+  } else {
+    ctx.textBaseline = 'middle';
+    ctx.fillText(Math.round(minDb).toString(), centerX + DB_DISPLAY_NOTCH_HALF_WIDTH + 3, centerY);
+  }
+
+  // Axis label: mirrored position — top-right corner of the bottom-left quadrant.
+  ctx.fillStyle = 'rgba(110, 110, 110, 0.75)';
+  ctx.font = '9px monospace';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'right';
+  ctx.fillText(isPanDisplayLineVisible ? '(p, db)' : 'db', centerX - 3, centerY + 5);
 }
 
 function drawVisualizer() {
@@ -543,7 +574,7 @@ function drawVisualizer() {
 
   ctx.save();
   ctx.beginPath();
-  ctx.rect(clipLeft, cy - halfSize, clipWidth, squareSize);
+  ctx.rect(clipLeft, cy - halfSize - DB_VERT_BLEED_PX, clipWidth, squareSize + DB_VERT_BLEED_PX * 2);
   ctx.clip();
 
   // Top half: upper bands drawn highest->lowest to keep the center boundary prominent.

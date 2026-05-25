@@ -36,9 +36,9 @@ const WIDTH_COMPRESSION = 0.2; // α = 1/5
 // Stevens-style loudness mapping for amplitude (A^0.67) keeps width growth perceptually realistic.
 const WIDTH_LOUDNESS_EXPONENT = 0.67;
 // Max proportional width expansion at full band level (independent of pitch by design).
-const DEFAULT_WIDTH_LEVEL_BOOST_RATIO = 0.35;
+const DEFAULT_WIDTH_LEVEL_BOOST_RATIO = 0.88;
 // Uniform scalar applied to all band halfWidths; preserves bass:treble and binaural proportions.
-const DEFAULT_WAVE_WIDTH_SCALE = 1.0;
+const DEFAULT_WAVE_WIDTH_SCALE = 2.50;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
 // -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
@@ -55,7 +55,13 @@ const PAN_EDGE_BLEED_PX = 14;
 const EDGE_FADE_CLEAR = 'rgba(22, 29, 37, 0)';
 const EDGE_FADE_SOLID = 'rgba(22, 29, 37, 1)';
 // Tiny center deadband keeps front-center visually stable against micro L/R noise.
-const PAN_CENTER_DEADBAND_POINTS = 0.6;
+const PAN_CENTER_DEADBAND_POINTS = DIVISION_EPSILON;
+// Minimum per-band L+R energy for rawPan=0 to be trusted as genuinely centred.
+// Below this floor, decaying residual after a transient averages L≈R; the zero
+// reading is noise rather than the mix position — hold the last confident value.
+// Non-zero rawPan values update freely at any energy level.
+
+const PAN_LOCK_FLOOR = 0.25;
 const PAN_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const PAN_DISPLAY_LINE_WIDTH = 1;
 const PAN_DISPLAY_NOTCH_HALF_HEIGHT = 4;
@@ -68,7 +74,7 @@ const TRANSIENT_SKEW_MAX = 0.82;
 const MIN_AUDIBLE_HZ = 20;
 const MAX_AUDIBLE_HZ = 20000;
 const BAND_MODE_KEYS = Object.freeze([7, 15, 25]);
-const DEFAULT_BAND_MODE = 25;
+const DEFAULT_BAND_MODE = 15;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -500,9 +506,10 @@ function drawVisualizer() {
     const displayEnergy = energy;
     const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
-    // AnalyserNode smoothingTimeConstant=0.8 already stabilises the frequency data;
-    // a second smoothing pass only adds lag. Assign directly and hold on silence.
-    if (l + r > 0.015) {
+    // Non-zero rawPan means the L-R difference is reliably directional — always update.
+    // rawPan=0 is only trusted as genuinely centred when energy exceeds PAN_LOCK_FLOOR;
+    // below that floor, decaying residual noise averages to centre and we hold instead.
+    if (rawPan !== 0 || l + r > PAN_LOCK_FLOOR) {
       panSmoothed[globalIdx] = rawPan;
     }
     drawWaveform(
@@ -533,9 +540,10 @@ function drawVisualizer() {
     const energy = (l + r) / 2;
     const displayEnergy = energy;
     const rawPan = toPanPoint(l, r);
-    // AnalyserNode smoothingTimeConstant=0.8 already stabilises the frequency data;
-    // a second smoothing pass only adds lag. Assign directly and hold on silence.
-    if (l + r > 0.015) {
+    // Non-zero rawPan means the L-R difference is reliably directional — always update.
+    // rawPan=0 is only trusted as genuinely centred when energy exceeds PAN_LOCK_FLOOR;
+    // below that floor, decaying residual noise averages to centre and we hold instead.
+    if (rawPan !== 0 || l + r > PAN_LOCK_FLOOR) {
       panSmoothed[i] = rawPan;
     }
     drawWaveform(

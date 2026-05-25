@@ -74,7 +74,7 @@ const PAN_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
 
 const MIN_AUDIBLE_HZ = 20;
 const MAX_AUDIBLE_HZ = 20000;
-const BAND_MODE_KEYS = Object.freeze([7, 15, 25]);
+const BAND_MODE_KEYS = Object.freeze([7, 15, 25, 49, 77, 99]);
 const DEFAULT_BAND_MODE = 15;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
@@ -167,6 +167,9 @@ const BAND_PROFILES = {
   }))),
   15: createBandProfile(createLogBands(15)),
   25: createBandProfile(createLogBands(25)),
+  49: createBandProfile(createLogBands(49)),
+  77: createBandProfile(createLogBands(77)),
+  99: createBandProfile(createLogBands(99)),
 };
 
 let activeBandMode = DEFAULT_BAND_MODE;

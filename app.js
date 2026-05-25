@@ -71,11 +71,15 @@ const PAN_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const PAN_DISPLAY_LINE_WIDTH = 1;
 const PAN_DISPLAY_NOTCH_HALF_HEIGHT = 4;
 const PAN_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
+const DB_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
+const DB_DISPLAY_LINE_WIDTH = 1;
+const DB_DISPLAY_NOTCH_HALF_WIDTH = 4;
+const DB_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
 
 const MIN_AUDIBLE_HZ = 20;
 const MAX_AUDIBLE_HZ = 20000;
 const BAND_MODE_KEYS = Object.freeze([7, 15, 25, 49, 77, 99]);
-const DEFAULT_BAND_MODE = 15;
+const DEFAULT_BAND_MODE = 49;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -453,6 +457,49 @@ function drawPanDisplayLine(centerX, centerY, radius) {
   ctx.stroke();
 }
 
+function drawDbDisplayLine(centerX, centerY, radius) {
+  // Read current analyser dB range so the scale stays accurate when normalization is active.
+  const maxDb = analyserLeft ? analyserLeft.maxDecibels : ANALYSER_FIXED_MAX_DB;
+  const minDb = analyserLeft ? analyserLeft.minDecibels : (ANALYSER_FIXED_MAX_DB - ANALYSER_DYNAMIC_RANGE_DB);
+  const dynamicRange = maxDb - minDb;
+
+  ctx.strokeStyle = DB_DISPLAY_LINE_COLOR;
+  ctx.lineWidth = DB_DISPLAY_LINE_WIDTH;
+  ctx.beginPath();
+  // Vertical axis: center = silence (minDb), edges = full scale (maxDb).
+  ctx.moveTo(centerX, centerY - radius);
+  ctx.lineTo(centerX, centerY + radius);
+
+  for (let i = -100; i <= 100; i += 1) {
+    const absI = Math.abs(i);
+    const isHighNotch =
+      absI === 0 ||
+      absI === 20 ||
+      absI === 40 ||
+      absI === 60 ||
+      absI === 80 ||
+      absI === 100;
+    const notchHalfWidth = isHighNotch
+      ? DB_DISPLAY_NOTCH_HALF_WIDTH
+      : DB_DISPLAY_NOTCH_HALF_WIDTH * DB_DISPLAY_MINOR_NOTCH_SCALE;
+    const y = centerY + (i / 100) * radius;
+    ctx.moveTo(centerX - notchHalfWidth, y);
+    ctx.lineTo(centerX + notchHalfWidth, y);
+  }
+  ctx.stroke();
+
+  // Numeric labels at each major notch — dBFS value that would drive a waveform to this height.
+  ctx.fillStyle = 'rgba(110, 110, 110, 0.75)';
+  ctx.font = '9px monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  for (let i = -100; i <= 100; i += 20) {
+    const db = minDb + (Math.abs(i) / 100) * dynamicRange;
+    const y = centerY + (i / 100) * radius;
+    ctx.fillText(Math.round(db).toString(), centerX + DB_DISPLAY_NOTCH_HALF_WIDTH + 3, y);
+  }
+}
+
 function drawVisualizer() {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -561,6 +608,8 @@ function drawVisualizer() {
   if (isPanDisplayLineVisible) {
     drawPanDisplayLine(cx, cy, halfSize);
   }
+
+  drawDbDisplayLine(cx, cy, halfSize);
 
   ctx.restore();
 }

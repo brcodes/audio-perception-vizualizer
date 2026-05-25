@@ -71,10 +71,6 @@ const PAN_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const PAN_DISPLAY_LINE_WIDTH = 1;
 const PAN_DISPLAY_NOTCH_HALF_HEIGHT = 4;
 const PAN_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
-// Right-to-left sweep speed (cycles/sec) makes crest peaks read as transients crossing a window.
-const TRANSIENT_SWEEP_HZ = 1.35;
-const TRANSIENT_SKEW_MIN = 0.2;
-const TRANSIENT_SKEW_MAX = 0.82;
 
 const MIN_AUDIBLE_HZ = 20;
 const MAX_AUDIBLE_HZ = 20000;
@@ -354,11 +350,6 @@ function amplitudeToHeightFactor(energy) {
   return Math.max(0, Math.min(1, energy)) * PEAK_HEIGHT_FACTOR;
 }
 
-function computeTransientSweepT() {
-  const t = (audio.currentTime * TRANSIENT_SWEEP_HZ) % 1;
-  return t < 0 ? t + 1 : t;
-}
-
 // Binaural apparent-source-width model (ASW):
 // For a lateral point source, IACC ≈ cos(θ), so perceived source width grows as (1 - cos(θ)).
 // Pan 0–100 maps to azimuth 0°–90°: θ = absPan × π/2 (absPan = |panPoint|/100, range 0–1).
@@ -377,7 +368,7 @@ function frequencyToWidthFactor(logT) {
   return WIDTH_W0 * Math.pow(1000, -WIDTH_COMPRESSION * logT);
 }
 
-function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint, sweepT) {
+function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint) {
   const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
   const height = radius * heightFactor * waveHeightScale;
 
@@ -400,17 +391,14 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
   const maxX = Math.min(rightLimit, panX + halfWidth);
   const width = maxX - minX;
   if (width <= DIVISION_EPSILON) return;
-  const transientSkew = TRANSIENT_SKEW_MAX - sweepT * (TRANSIENT_SKEW_MAX - TRANSIENT_SKEW_MIN);
-  const transientPeakX = minX + width * transientSkew;
-  const shoulderX = minX + width * 0.45;
+  const peakX = minX + width * 0.5;
 
-  // Asymmetric crest with a drifting peak reads like transients moving right→left.
   ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineAlpha})`;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
-  ctx.quadraticCurveTo(shoulderX, centerY + dir * height * 0.95, transientPeakX, centerY + dir * height);
-  ctx.quadraticCurveTo(maxX - width * 0.08, centerY + dir * height * 1.15, maxX, centerY);
+  // Control at 2× height so the curve's actual midpoint peak lands at height.
+  ctx.quadraticCurveTo(peakX, centerY + dir * height * 2, maxX, centerY);
   ctx.stroke();
 }
 
@@ -485,7 +473,6 @@ function drawVisualizer() {
   const left = leftData || ZERO_FREQUENCY_DATA;
   const right = rightData || ZERO_FREQUENCY_DATA;
   const lineAlpha = Number(lineAlphaSlider.value);
-  const sweepT = computeTransientSweepT();
   // Keep visual continuity: slider value 0.70 reproduces the prior fixed 1.25px line width.
   const lineWidth =
     (Math.max(0.01, Number(lineThicknessSlider.value)) / BASE_LINE_THICKNESS_CONTROL) *
@@ -529,7 +516,6 @@ function drawVisualizer() {
       displayEnergy,
       band.logT,
       panSmoothed[globalIdx],
-      sweepT,
     );
   }
   ctx.restore();
@@ -563,7 +549,6 @@ function drawVisualizer() {
       displayEnergy,
       band.logT,
       panSmoothed[i],
-      sweepT,
     );
   }
   ctx.restore();

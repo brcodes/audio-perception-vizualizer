@@ -14,6 +14,8 @@ const widthBoostSlider = document.getElementById('widthBoostSlider');
 const widthBoostValueEl = document.getElementById('widthBoostValue');
 const waveWidthScaleSlider = document.getElementById('waveWidthScaleSlider');
 const waveWidthScaleValueEl = document.getElementById('waveWidthScaleValue');
+const waveHeightScaleSlider = document.getElementById('waveHeightScaleSlider');
+const waveHeightScaleValueEl = document.getElementById('waveHeightScaleValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
@@ -39,6 +41,8 @@ const WIDTH_LOUDNESS_EXPONENT = 0.67;
 const DEFAULT_WIDTH_LEVEL_BOOST_RATIO = 0.88;
 // Uniform scalar applied to all band halfWidths; preserves bass:treble and binaural proportions.
 const DEFAULT_WAVE_WIDTH_SCALE = 2.50;
+// Uniform scalar applied to PEAK_HEIGHT_FACTOR; 1.0 = unmodified 0.527 peak excursion.
+const DEFAULT_WAVE_HEIGHT_SCALE = 1.35;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
 // -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
@@ -193,6 +197,7 @@ let isHeightNormalized = false;
 let isHeightNormalizationCalibrating = false;
 let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
 let waveWidthScale = DEFAULT_WAVE_WIDTH_SCALE;
+let waveHeightScale = DEFAULT_WAVE_HEIGHT_SCALE;
 let currentFile;
 let analysisGeneration = 0;
 
@@ -373,7 +378,7 @@ function frequencyToWidthFactor(logT) {
 
 function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint, sweepT) {
   const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
-  const height = radius * heightFactor;
+  const height = radius * heightFactor * waveHeightScale;
 
   const widthBase = frequencyToWidthFactor(logT);
   const clampedEnergy = Math.max(0, Math.min(1, energy));
@@ -808,6 +813,7 @@ makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
 makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
 makeSliderPair(widthBoostSlider, widthBoostValueEl, 0, 1.0, 2);
 makeSliderPair(waveWidthScaleSlider, waveWidthScaleValueEl, 0.25, 10.0, 2);
+makeSliderPair(waveHeightScaleSlider, waveHeightScaleValueEl, 0.25, 10.0, 2);
 
 function setWidthLevelBoostRatio(nextRatio) {
   const clamped = Math.max(0, Math.min(1, nextRatio));
@@ -839,6 +845,22 @@ waveWidthScaleSlider.addEventListener('input', () => {
 waveWidthScaleValueEl.addEventListener('change', () => {
   // makeSliderPair clamps the value first, so read from slider for canonical state.
   setWaveWidthScale(Number(waveWidthScaleSlider.value));
+});
+
+function setWaveHeightScale(nextScale) {
+  const clamped = Math.max(0.25, Math.min(10.0, nextScale));
+  if (Math.abs(waveHeightScale - clamped) < DIVISION_EPSILON) return;
+  waveHeightScale = clamped;
+  drawVisualizer();
+}
+
+waveHeightScaleSlider.addEventListener('input', () => {
+  setWaveHeightScale(Number(waveHeightScaleSlider.value));
+});
+
+waveHeightScaleValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  setWaveHeightScale(Number(waveHeightScaleSlider.value));
 });
 
 // Nudge buttons: step a slider by one unit in either direction.

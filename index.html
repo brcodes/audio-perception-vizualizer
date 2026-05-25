@@ -85,6 +85,17 @@
       </span>
       <input id="waveWidthScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="2.50"
         class="ctrl-value-input" aria-label="Wave width scale value" />
+      <label for="waveHeightScaleSlider" class="ctrl-label">Wave Height Scale</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="waveHeightScaleSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease wave height scale">−</button>
+        <input id="waveHeightScaleSlider" type="range" min="0.25" max="10.00" value="1.35" step="0.05"
+          class="ctrl-slider" aria-label="Wave height scale" />
+        <button class="nudge-btn" data-target="waveHeightScaleSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase wave height scale">+</button>
+      </span>
+      <input id="waveHeightScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="1.35"
+        class="ctrl-value-input" aria-label="Wave height scale value" />
     </section>
     <section class="seekbar">
       <span id="currentTime">0:00</span>

@@ -500,11 +500,10 @@ function drawVisualizer() {
     const displayEnergy = energy;
     const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
-    // Use the same activity floor as toPanPoint (l+r≥0.015) so any band with a valid
-    // pan reading is tracked rather than decayed — prevents low-energy treble bands
-    // with hard pans from collapsing to center between transients.
+    // AnalyserNode smoothingTimeConstant=0.8 already stabilises the frequency data;
+    // a second smoothing pass only adds lag. Assign directly and hold on silence.
     if (l + r > 0.015) {
-      panSmoothed[globalIdx] = panSmoothed[globalIdx] * 0.85 + rawPan * 0.15;
+      panSmoothed[globalIdx] = rawPan;
     }
     drawWaveform(
       cx,
@@ -534,11 +533,10 @@ function drawVisualizer() {
     const energy = (l + r) / 2;
     const displayEnergy = energy;
     const rawPan = toPanPoint(l, r);
-    // Use the same activity floor as toPanPoint (l+r≥0.015) so any band with a valid
-    // pan reading is tracked rather than decayed — prevents low-energy treble bands
-    // with hard pans from collapsing to center between transients.
+    // AnalyserNode smoothingTimeConstant=0.8 already stabilises the frequency data;
+    // a second smoothing pass only adds lag. Assign directly and hold on silence.
     if (l + r > 0.015) {
-      panSmoothed[i] = panSmoothed[i] * 0.85 + rawPan * 0.15;
+      panSmoothed[i] = rawPan;
     }
     drawWaveform(
       cx,

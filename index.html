@@ -1,69 +1,106 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Music Mix Mapper</title>
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <main class="app">
-      <section class="controls">
-        <h1>Music Mix Mapper</h1>
-        <label for="fileInput">Upload MP3</label>
-        <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
-        <button id="playPauseBtn" type="button" disabled>Play</button>
-        <button id="togglePanLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle pan display line">Pan Line: On</button>
-        <button id="normalizeHeightBtn" type="button" class="toggle-btn" aria-label="Toggle waveform height normalization" aria-pressed="false">Normalize Height: Off</button>
-        <button id="binauralPanBtn" type="button" class="toggle-btn" aria-label="Toggle binaural pan display" aria-pressed="false">Binaural Pan: Off</button>
-        <span class="ctrl-label">Bands</span>
-        <span class="bands-row" role="group" aria-label="Visualizer band count">
-          <button id="bands7Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="7" aria-label="Use seven frequency bands" aria-pressed="false">7</button>
-          <button id="bands15Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="15" aria-label="Use fifteen frequency bands" aria-pressed="false">15</button>
-          <button id="bands25Btn" type="button" class="toggle-btn band-mode-btn is-active" data-band-count="25" aria-label="Use twenty five frequency bands" aria-pressed="true">25</button>
-        </span>
-        <label for="panScaleSlider" class="ctrl-label">Pan Scale</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="panScaleSlider" data-dir="-1" tabindex="-1" aria-label="Decrease pan scale">−</button>
-          <input id="panScaleSlider" type="range" min="0.10" max="0.80" value="0.14" step="0.01" class="ctrl-slider" aria-label="Pan scale sensitivity" />
-          <button class="nudge-btn" data-target="panScaleSlider" data-dir="1" tabindex="-1" aria-label="Increase pan scale">+</button>
-        </span>
-        <input id="panScaleValue" type="number" min="0.10" max="0.80" step="0.01" value="0.14" class="ctrl-value-input" aria-label="Pan scale value" />
-        <label for="lineAlphaSlider" class="ctrl-label">Line Alpha</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1" aria-label="Decrease line alpha">−</button>
-          <input id="lineAlphaSlider" type="range" min="0" max="1" value="1.00" step="0.01" class="ctrl-slider" aria-label="Waveform line alpha" />
-          <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1" aria-label="Increase line alpha">+</button>
-        </span>
-        <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="1.00" class="ctrl-value-input" aria-label="Line alpha value" />
-        <label for="lineThicknessSlider" class="ctrl-label">Line Thickness</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="-1" tabindex="-1" aria-label="Decrease line thickness">−</button>
-          <input id="lineThicknessSlider" type="range" min="0.01" max="1.0" value="0.10" step="0.01" class="ctrl-slider" aria-label="Waveform line thickness" />
-          <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="1" tabindex="-1" aria-label="Increase line thickness">+</button>
-        </span>
-        <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.10" class="ctrl-value-input" aria-label="Line thickness value" />
-        <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (by Amp) Level</label>
-        <span class="slider-row">
-          <button class="nudge-btn" data-target="widthBoostSlider" data-dir="-1" tabindex="-1" aria-label="Decrease wave width boost level">−</button>
-          <input id="widthBoostSlider" type="range" min="0.00" max="1.00" value="0.35" step="0.01" class="ctrl-slider" aria-label="Wave width boost by amplitude level" />
-          <button class="nudge-btn" data-target="widthBoostSlider" data-dir="1" tabindex="-1" aria-label="Increase wave width boost level">+</button>
-        </span>
-        <input id="widthBoostValue" type="number" min="0.00" max="1.00" step="0.01" value="0.35" class="ctrl-value-input" aria-label="Wave width boost by amplitude level value" />
-      </section>
-      <section class="seekbar">
-        <span id="currentTime">0:00</span>
-        <span class="slider-row seek-row">
-          <button class="nudge-btn" data-target="seekSlider" data-dir="-1" tabindex="-1" aria-label="Seek back">−</button>
-          <input id="seekSlider" type="range" min="0" max="100" value="0" step="0.1" disabled aria-label="Seek" />
-          <button class="nudge-btn" data-target="seekSlider" data-dir="1" tabindex="-1" aria-label="Seek forward">+</button>
-        </span>
-        <span id="totalTime">0:00</span>
-      </section>
-      <canvas id="vizCanvas" role="img" aria-label="Music Mix Mapper Visualizer">
-        Square visualization of MP3 frequency and stereo pan content.
-      </canvas>
-    </main>
-    <script type="module" src="./app.js"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Music Mix Mapper</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <main class="app">
+    <section class="controls">
+      <h1>Music Mix Mapper</h1>
+      <label for="fileInput">Upload MP3</label>
+      <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
+      <button id="playPauseBtn" type="button" disabled>Play</button>
+      <button id="togglePanLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle pan display line">Pan
+        Line: On</button>
+      <button id="normalizeHeightBtn" type="button" class="toggle-btn" aria-label="Toggle waveform height normalization"
+        aria-pressed="false">Normalize Height: Off</button>
+      <button id="binauralPanBtn" type="button" class="toggle-btn" aria-label="Toggle binaural pan display"
+        aria-pressed="false">Binaural Pan: Off</button>
+      <span class="ctrl-label">Bands</span>
+      <span class="bands-row" role="group" aria-label="Visualizer band count">
+        <button id="bands7Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="7"
+          aria-label="Use seven frequency bands" aria-pressed="false">7</button>
+        <button id="bands15Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="15"
+          aria-label="Use fifteen frequency bands" aria-pressed="false">15</button>
+        <button id="bands25Btn" type="button" class="toggle-btn band-mode-btn is-active" data-band-count="25"
+          aria-label="Use twenty five frequency bands" aria-pressed="true">25</button>
+      </span>
+      <label for="panScaleSlider" class="ctrl-label">Pan Scale</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="panScaleSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease pan scale">−</button>
+        <input id="panScaleSlider" type="range" min="0.10" max="0.80" value="0.14" step="0.01" class="ctrl-slider"
+          aria-label="Pan scale sensitivity" />
+        <button class="nudge-btn" data-target="panScaleSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase pan scale">+</button>
+      </span>
+      <input id="panScaleValue" type="number" min="0.10" max="0.80" step="0.01" value="0.14" class="ctrl-value-input"
+        aria-label="Pan scale value" />
+      <label for="lineAlphaSlider" class="ctrl-label">Line Alpha</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease line alpha">−</button>
+        <input id="lineAlphaSlider" type="range" min="0" max="1" value="1.00" step="0.01" class="ctrl-slider"
+          aria-label="Waveform line alpha" />
+        <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase line alpha">+</button>
+      </span>
+      <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="1.00" class="ctrl-value-input"
+        aria-label="Line alpha value" />
+      <label for="lineThicknessSlider" class="ctrl-label">Line Thickness</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease line thickness">−</button>
+        <input id="lineThicknessSlider" type="range" min="0.01" max="1.0" value="0.10" step="0.01" class="ctrl-slider"
+          aria-label="Waveform line thickness" />
+        <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase line thickness">+</button>
+      </span>
+      <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.10"
+        class="ctrl-value-input" aria-label="Line thickness value" />
+      <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (by Amp) Level</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="widthBoostSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease wave width boost level">−</button>
+        <input id="widthBoostSlider" type="range" min="0.00" max="1.00" value="0.35" step="0.01" class="ctrl-slider"
+          aria-label="Wave width boost by amplitude level" />
+        <button class="nudge-btn" data-target="widthBoostSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase wave width boost level">+</button>
+      </span>
+      <input id="widthBoostValue" type="number" min="0.00" max="1.00" step="0.01" value="0.35" class="ctrl-value-input"
+        aria-label="Wave width boost by amplitude level value" />
+      <label for="waveWidthScaleSlider" class="ctrl-label">Wave Width Scale</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="waveWidthScaleSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease wave width scale">−</button>
+        <input id="waveWidthScaleSlider" type="range" min="0.25" max="10.00" value="1.00" step="0.05"
+          class="ctrl-slider" aria-label="Wave width scale" />
+        <button class="nudge-btn" data-target="waveWidthScaleSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase wave width scale">+</button>
+      </span>
+      <input id="waveWidthScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="1.00"
+        class="ctrl-value-input" aria-label="Wave width scale value" />
+    </section>
+    <section class="seekbar">
+      <span id="currentTime">0:00</span>
+      <span class="slider-row seek-row">
+        <button class="nudge-btn" data-target="seekSlider" data-dir="-1" tabindex="-1" aria-label="Seek back">−</button>
+        <input id="seekSlider" type="range" min="0" max="100" value="0" step="0.1" disabled aria-label="Seek" />
+        <button class="nudge-btn" data-target="seekSlider" data-dir="1" tabindex="-1"
+          aria-label="Seek forward">+</button>
+      </span>
+      <span id="totalTime">0:00</span>
+    </section>
+    <canvas id="vizCanvas" role="img" aria-label="Music Mix Mapper Visualizer">
+      Square visualization of MP3 frequency and stereo pan content.
+    </canvas>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+
 </html>

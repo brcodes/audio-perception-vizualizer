@@ -12,6 +12,8 @@ const lineThicknessSlider = document.getElementById('lineThicknessSlider');
 const lineThicknessValueEl = document.getElementById('lineThicknessValue');
 const widthBoostSlider = document.getElementById('widthBoostSlider');
 const widthBoostValueEl = document.getElementById('widthBoostValue');
+const waveWidthScaleSlider = document.getElementById('waveWidthScaleSlider');
+const waveWidthScaleValueEl = document.getElementById('waveWidthScaleValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
@@ -35,6 +37,8 @@ const WIDTH_COMPRESSION = 0.2; // α = 1/5
 const WIDTH_LOUDNESS_EXPONENT = 0.67;
 // Max proportional width expansion at full band level (independent of pitch by design).
 const DEFAULT_WIDTH_LEVEL_BOOST_RATIO = 0.35;
+// Uniform scalar applied to all band halfWidths; preserves bass:treble and binaural proportions.
+const DEFAULT_WAVE_WIDTH_SCALE = 1.0;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
 // -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
@@ -71,15 +75,15 @@ const ZERO_FREQUENCY_DATA = new Uint8Array(1);
 
 // Existing bin colors anchored to their log-frequency positions (logT = 0–1 over 20Hz–20kHz)
 const COLOR_STOPS = [
-  { t: 0,      r: 88,  g: 0,   b: 0   },
-  { t: 0.0794, r: 88,  g: 0,   b: 0   },
-  { t: 0.2624, r: 255, g: 46,  b: 0   },
-  { t: 0.4160, r: 255, g: 140, b: 0   },
-  { t: 0.5663, r: 255, g: 235, b: 0   },
-  { t: 0.7169, r: 102, g: 204, b: 0   },
-  { t: 0.7964, r: 0,   g: 204, b: 221 },
-  { t: 0.9129, r: 75,  g: 46,  b: 255 },
-  { t: 1,      r: 75,  g: 46,  b: 255 },
+  { t: 0, r: 88, g: 0, b: 0 },
+  { t: 0.0794, r: 88, g: 0, b: 0 },
+  { t: 0.2624, r: 255, g: 46, b: 0 },
+  { t: 0.4160, r: 255, g: 140, b: 0 },
+  { t: 0.5663, r: 255, g: 235, b: 0 },
+  { t: 0.7169, r: 102, g: 204, b: 0 },
+  { t: 0.7964, r: 0, g: 204, b: 221 },
+  { t: 0.9129, r: 75, g: 46, b: 255 },
+  { t: 1, r: 75, g: 46, b: 255 },
 ];
 
 const SEVEN_BAND_BINS = [
@@ -182,6 +186,7 @@ let isBinauralPanDisplayActive = false;
 let isHeightNormalized = false;
 let isHeightNormalizationCalibrating = false;
 let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
+let waveWidthScale = DEFAULT_WAVE_WIDTH_SCALE;
 let currentFile;
 let analysisGeneration = 0;
 
@@ -368,7 +373,7 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
   const clampedEnergy = Math.max(0, Math.min(1, energy));
   const levelBoost =
     widthBase * widthLevelBoostRatio * Math.pow(clampedEnergy, WIDTH_LOUDNESS_EXPONENT);
-  let halfWidth = radius * (widthBase + levelBoost);
+  let halfWidth = radius * (widthBase + levelBoost) * waveWidthScale;
   // Off: no pan inflation — width driven purely by pitch and amplitude.
   // On: (1-cosθ) binaural spread bonus; zero at center, max lateral wrap at ±100.
   if (isBinauralPanDisplayActive) {
@@ -793,6 +798,7 @@ function makeSliderPair(slider, field, min, max, decimals) {
 makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
 makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
 makeSliderPair(widthBoostSlider, widthBoostValueEl, 0, 1.0, 2);
+makeSliderPair(waveWidthScaleSlider, waveWidthScaleValueEl, 0.25, 10.0, 2);
 
 function setWidthLevelBoostRatio(nextRatio) {
   const clamped = Math.max(0, Math.min(1, nextRatio));
@@ -808,6 +814,22 @@ widthBoostSlider.addEventListener('input', () => {
 widthBoostValueEl.addEventListener('change', () => {
   // makeSliderPair clamps the value first, so read from slider for canonical state.
   setWidthLevelBoostRatio(Number(widthBoostSlider.value));
+});
+
+function setWaveWidthScale(nextScale) {
+  const clamped = Math.max(0.25, Math.min(10.0, nextScale));
+  if (Math.abs(waveWidthScale - clamped) < DIVISION_EPSILON) return;
+  waveWidthScale = clamped;
+  drawVisualizer();
+}
+
+waveWidthScaleSlider.addEventListener('input', () => {
+  setWaveWidthScale(Number(waveWidthScaleSlider.value));
+});
+
+waveWidthScaleValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  setWaveWidthScale(Number(waveWidthScaleSlider.value));
 });
 
 // Nudge buttons: step a slider by one unit in either direction.

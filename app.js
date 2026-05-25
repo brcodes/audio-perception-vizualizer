@@ -23,8 +23,9 @@ const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
-// Full-scale band energy maps linearly to 52.7% of half-frame height to preserve amplitude proportion.
-const PEAK_HEIGHT_FACTOR = 0.527;
+// Full-scale band energy maps to 94.86% of half-frame height (= 0.527 × 1.8); absorbs the
+// former 1.8× curve overshoot so the height slider is the single knob for peak excursion.
+const PEAK_HEIGHT_FACTOR = 0.9486;
 // Max binaural pan spread bonus at full pan (±100). Derived from the (1-cosθ) apparent-source-width
 // model: IACC ≈ cos(θ) for a lateral point source, so ASW ∝ (1-cos(θ)); 0.18 keeps the effect
 // perceptually meaningful without exaggerating moderately panned material.
@@ -408,7 +409,7 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
-  ctx.quadraticCurveTo(shoulderX, centerY + dir * height * 0.95, transientPeakX, centerY + dir * height * 1.8);
+  ctx.quadraticCurveTo(shoulderX, centerY + dir * height * 0.95, transientPeakX, centerY + dir * height);
   ctx.quadraticCurveTo(maxX - width * 0.08, centerY + dir * height * 1.15, maxX, centerY);
   ctx.stroke();
 }

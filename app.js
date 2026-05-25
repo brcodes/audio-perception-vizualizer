@@ -494,13 +494,17 @@ function drawDbDisplayLine(centerX, centerY, radius) {
   }
   ctx.stroke();
 
-  // Numeric labels at each major notch — dBFS value that would drive a waveform to this height.
+  // Numeric labels at each major notch — the actual dBFS a signal must reach to drive a waveform
+  // peak to this pixel height. Inverts: height = radius × energy × PEAK_HEIGHT_FACTOR × waveHeightScale,
+  // so energy = pixelFraction / (PEAK_HEIGHT_FACTOR × waveHeightScale). Clamped to [minDb, maxDb]
+  // because a low waveHeightScale can make the edge represent beyond-full-scale (impossible in practice).
   ctx.fillStyle = 'rgba(110, 110, 110, 0.75)';
   ctx.font = '9px monospace';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   for (let i = -100; i <= 100; i += 20) {
-    const db = minDb + (Math.abs(i) / 100) * dynamicRange;
+    const energy = (Math.abs(i) / 100) / (PEAK_HEIGHT_FACTOR * waveHeightScale);
+    const db = minDb + Math.min(1, energy) * dynamicRange;
     const y = centerY + (i / 100) * radius;
     ctx.fillText(Math.round(db).toString(), centerX + DB_DISPLAY_NOTCH_HALF_WIDTH + 3, y);
   }

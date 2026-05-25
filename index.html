@@ -102,6 +102,17 @@
       </span>
       <input id="waveHeightScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="1.35"
         class="ctrl-value-input" aria-label="Wave height scale value" />
+      <label for="panEdgeFadeSlider" class="ctrl-label">Pan Edge Fade</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease pan edge fade intensity">−</button>
+        <input id="panEdgeFadeSlider" type="range" min="0" max="1" value="0.61" step="0.01" class="ctrl-slider"
+          aria-label="Pan edge fade intensity" />
+        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase pan edge fade intensity">+</button>
+      </span>
+      <input id="panEdgeFadeValue" type="number" min="0" max="1" step="0.01" value="0.61" class="ctrl-value-input"
+        aria-label="Pan edge fade intensity value" />
     </section>
     <section class="seekbar">
       <span id="currentTime">0:00</span>

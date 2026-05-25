@@ -16,6 +16,8 @@ const waveWidthScaleSlider = document.getElementById('waveWidthScaleSlider');
 const waveWidthScaleValueEl = document.getElementById('waveWidthScaleValue');
 const waveHeightScaleSlider = document.getElementById('waveHeightScaleSlider');
 const waveHeightScaleValueEl = document.getElementById('waveHeightScaleValue');
+const panEdgeFadeSlider = document.getElementById('panEdgeFadeSlider');
+const panEdgeFadeValueEl = document.getElementById('panEdgeFadeValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
@@ -55,9 +57,11 @@ const ANALYSER_HEADROOM_DB = 1;
 // 3 dB below full scale gives tight headroom so a track's own peak → 255 in Option B (Normalize Height On).
 const MAX_ANALYSER_MAX_DB = -3;
 const MIN_ANALYSER_MAX_DB = -50;
-// Small side bleed lets hard-panned shapes complete without inventing pan points beyond +/-100.
-const PAN_EDGE_BLEED_PX = 14;
-const EDGE_FADE_CLEAR = 'rgba(22, 29, 37, 0)';
+// Side bleed lets hard-panned shapes complete without inventing pan points beyond +/-100.
+const PAN_EDGE_BLEED_PX = 200;
+// 0 = no masking (bleed fully visible); 1 = hard cutoff right at the ±100 edge.
+// Intermediate values start the fade at that opacity at ±100 and ramp to fully opaque at the clip edge.
+let panEdgeFadeIntensity = 1.0;
 const EDGE_FADE_SOLID = 'rgba(22, 29, 37, 1)';
 // Tiny center deadband keeps front-center visually stable against micro L/R noise.
 const PAN_CENTER_DEADBAND_POINTS = DIVISION_EPSILON;
@@ -410,23 +414,25 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
 }
 
 function drawPanEdgeFade(centerX, centerY, radius) {
-  if (PAN_EDGE_BLEED_PX <= 0) return;
+  if (PAN_EDGE_BLEED_PX <= 0 || panEdgeFadeIntensity <= 0) return;
   const topY = centerY - radius;
   const height = radius * 2;
   const leftCoreX = centerX - radius;
   const rightCoreX = centerX + radius;
   const leftBleedX = leftCoreX - PAN_EDGE_BLEED_PX;
   const rightBleedX = rightCoreX + PAN_EDGE_BLEED_PX;
+  // Inner stop opacity = intensity: 1.0 = immediately opaque at ±100 (hard cut), <1 = gradient ramp.
+  const innerStop = `rgba(22, 29, 37, ${panEdgeFadeIntensity})`;
 
   // Fade only in the bleed gutters so +/-100 remains the localization endpoint.
   const leftFade = ctx.createLinearGradient(leftCoreX, 0, leftBleedX, 0);
-  leftFade.addColorStop(0, EDGE_FADE_CLEAR);
+  leftFade.addColorStop(0, innerStop);
   leftFade.addColorStop(1, EDGE_FADE_SOLID);
   ctx.fillStyle = leftFade;
   ctx.fillRect(leftBleedX, topY, PAN_EDGE_BLEED_PX, height);
 
   const rightFade = ctx.createLinearGradient(rightCoreX, 0, rightBleedX, 0);
-  rightFade.addColorStop(0, EDGE_FADE_CLEAR);
+  rightFade.addColorStop(0, innerStop);
   rightFade.addColorStop(1, EDGE_FADE_SOLID);
   ctx.fillStyle = rightFade;
   ctx.fillRect(rightCoreX, topY, PAN_EDGE_BLEED_PX, height);
@@ -852,6 +858,7 @@ makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
 makeSliderPair(widthBoostSlider, widthBoostValueEl, 0, 1.0, 2);
 makeSliderPair(waveWidthScaleSlider, waveWidthScaleValueEl, 0.25, 10.0, 2);
 makeSliderPair(waveHeightScaleSlider, waveHeightScaleValueEl, 0.25, 10.0, 2);
+makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
 
 function setWidthLevelBoostRatio(nextRatio) {
   const clamped = Math.max(0, Math.min(1, nextRatio));
@@ -899,6 +906,17 @@ waveHeightScaleSlider.addEventListener('input', () => {
 waveHeightScaleValueEl.addEventListener('change', () => {
   // makeSliderPair clamps the value first, so read from slider for canonical state.
   setWaveHeightScale(Number(waveHeightScaleSlider.value));
+});
+
+panEdgeFadeSlider.addEventListener('input', () => {
+  panEdgeFadeIntensity = Number(panEdgeFadeSlider.value);
+  drawVisualizer();
+});
+
+panEdgeFadeValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  panEdgeFadeIntensity = Number(panEdgeFadeSlider.value);
+  drawVisualizer();
 });
 
 // Nudge buttons: step a slider by one unit in either direction.

@@ -49,28 +49,17 @@
       </span>
       <input id="panWidthValue" type="number" min="0.50" max="2.00" step="0.01" value="1.00" class="ctrl-value-input"
         aria-label="Pan width value" />
-      <label for="panHoldFloorSlider" class="ctrl-label">Pan Hold Floor (Low-Energy)</label>
+      <label for="panLockSlider" class="ctrl-label">Pan Lock</label>
       <span class="slider-row">
-        <button class="nudge-btn" data-target="panHoldFloorSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease pan hold floor">−</button>
-        <input id="panHoldFloorSlider" type="range" min="0.00" max="1.00" value="0.25" step="0.01" class="ctrl-slider"
-          aria-label="Pan hold floor threshold" />
-        <button class="nudge-btn" data-target="panHoldFloorSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase pan hold floor">+</button>
+        <button class="nudge-btn" data-target="panLockSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease pan lock">−</button>
+        <input id="panLockSlider" type="range" min="0.00" max="1.00" value="0.00" step="0.01" class="ctrl-slider"
+          aria-label="Pan lock amount" />
+        <button class="nudge-btn" data-target="panLockSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase pan lock">+</button>
       </span>
-      <input id="panHoldFloorValue" type="number" min="0.00" max="1.00" step="0.01" value="0.25"
-        class="ctrl-value-input" aria-label="Pan hold floor value" />
-      <label for="panMinUpdateSlider" class="ctrl-label">Pan Min Update (Points)</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="panMinUpdateSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease minimum pan update">−</button>
-        <input id="panMinUpdateSlider" type="range" min="0.00" max="25.00" value="1.00" step="0.10" class="ctrl-slider"
-          aria-label="Minimum pan update threshold in points" />
-        <button class="nudge-btn" data-target="panMinUpdateSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase minimum pan update">+</button>
-      </span>
-      <input id="panMinUpdateValue" type="number" min="0.00" max="25.00" step="0.10" value="1.00"
-        class="ctrl-value-input" aria-label="Minimum pan update threshold value" />
+      <input id="panLockValue" type="number" min="0.00" max="1.00" step="0.01" value="0.00" class="ctrl-value-input"
+        aria-label="Pan lock value" />
       <label for="lineAlphaSlider" class="ctrl-label">Line Alpha</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1"

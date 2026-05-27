@@ -6,10 +6,8 @@ const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
 const panWidthSlider = document.getElementById('panWidthSlider');
 const panWidthValueEl = document.getElementById('panWidthValue');
-const panHoldFloorSlider = document.getElementById('panHoldFloorSlider');
-const panHoldFloorValueEl = document.getElementById('panHoldFloorValue');
-const panMinUpdateSlider = document.getElementById('panMinUpdateSlider');
-const panMinUpdateValueEl = document.getElementById('panMinUpdateValue');
+const panLockSlider = document.getElementById('panLockSlider');
+const panLockValueEl = document.getElementById('panLockValue');
 const lineAlphaSlider = document.getElementById('lineAlphaSlider');
 const lineAlphaValueEl = document.getElementById('lineAlphaValue');
 const lineThicknessSlider = document.getElementById('lineThicknessSlider');
@@ -79,10 +77,11 @@ const EDGE_FADE_SOLID = 'rgba(22, 29, 37, 1)';
 const PAN_CENTER_DEADBAND_POINTS = DIVISION_EPSILON;
 // Fixed full dominance keeps hard-panned one-sided bands visually lateral.
 const DEFAULT_PAN_DOMINANCE_RATIO = 1.00;
-// Minimum per-band L+R energy for rawPan=0 to be trusted as genuinely centred.
+// Center Trust Threshold: minimum band energy required to accept a center pan reading;
+// lower values trust quiet center more, higher values hold prior pan longer.
 const DEFAULT_PAN_HOLD_FLOOR = 0.25;
-// Small per-band pan deltas are often FFT noise; this floor suppresses those updates.
-const DEFAULT_PAN_MIN_UPDATE_POINTS = 1.0;
+// Pan lock amount: 0 = no lock, 1 = fully frozen pan state.
+const DEFAULT_PAN_LOCK_RATIO = 0.0;
 // Blend toward level-invariant pan only for clearly one-sided bands.
 const PAN_DOMINANCE_BLEND_START = 0.70;
 const PAN_DOMINANCE_BLEND_END = 0.98;
@@ -228,17 +227,12 @@ let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
 let waveWidthScale = DEFAULT_WAVE_WIDTH_SCALE;
 let waveHeightScale = DEFAULT_WAVE_HEIGHT_SCALE;
 let panDominanceRatio = DEFAULT_PAN_DOMINANCE_RATIO;
-let panHoldFloor = Math.max(
+const panHoldFloor = DEFAULT_PAN_HOLD_FLOOR;
+let panLockRatio = Math.max(
   0,
-  Math.min(1, Number.isFinite(Number(panHoldFloorSlider.value))
-    ? Number(panHoldFloorSlider.value)
-    : DEFAULT_PAN_HOLD_FLOOR),
-);
-let panMinUpdatePoints = Math.max(
-  0,
-  Math.min(25, Number.isFinite(Number(panMinUpdateSlider.value))
-    ? Number(panMinUpdateSlider.value)
-    : DEFAULT_PAN_MIN_UPDATE_POINTS),
+  Math.min(1, Number.isFinite(Number(panLockSlider.value))
+    ? Number(panLockSlider.value)
+    : DEFAULT_PAN_LOCK_RATIO),
 );
 let currentFile;
 let analysisGeneration = 0;
@@ -746,9 +740,16 @@ function drawVisualizer() {
     const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
     const panDelta = Math.abs(rawPan - panSmoothed[globalIdx]);
+    // Center Trust Threshold tooltip: Minimum band energy required to accept a center pan reading;
+    // lower values trust quiet center more, higher values hold prior pan longer.
     // Hold prior pan whenever low-energy centre readings are ambiguous.
     const centerIsTrusted = rawPan !== 0 || l + r > panHoldFloor;
-    if (centerIsTrusted && panDelta >= panMinUpdatePoints) {
+    // Pan Lock: 0 = render every trusted pan calculation, 1 = freeze pan regardless of calculation.
+    // Linear mapping uses full pan-delta span (0..200) between these endpoints.
+    const panIsLocked = panLockRatio >= 1 - DIVISION_EPSILON;
+    const minDeltaForUnlock = panLockRatio * 200;
+    const passesPanLock = !panIsLocked && panDelta >= minDeltaForUnlock;
+    if (centerIsTrusted && passesPanLock) {
       panSmoothed[globalIdx] = rawPan;
     }
     drawWaveform(
@@ -781,7 +782,10 @@ function drawVisualizer() {
     const panDelta = Math.abs(rawPan - panSmoothed[i]);
     // Hold prior pan whenever low-energy centre readings are ambiguous.
     const centerIsTrusted = rawPan !== 0 || l + r > panHoldFloor;
-    if (centerIsTrusted && panDelta >= panMinUpdatePoints) {
+    const panIsLocked = panLockRatio >= 1 - DIVISION_EPSILON;
+    const minDeltaForUnlock = panLockRatio * 200;
+    const passesPanLock = !panIsLocked && panDelta >= minDeltaForUnlock;
+    if (centerIsTrusted && passesPanLock) {
       panSmoothed[i] = rawPan;
     }
     drawWaveform(
@@ -1159,8 +1163,7 @@ function makeSliderPair(slider, field, min, max, decimals) {
   });
 }
 
-makeSliderPair(panHoldFloorSlider, panHoldFloorValueEl, 0, 1, 2);
-makeSliderPair(panMinUpdateSlider, panMinUpdateValueEl, 0, 25, 2);
+makeSliderPair(panLockSlider, panLockValueEl, 0, 1, 2);
 makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
 makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
 makeSliderPair(widthBoostSlider, widthBoostValueEl, 0, 1.0, 2);
@@ -1170,36 +1173,20 @@ makeSliderPair(waveHeightFitScaleSlider, waveHeightFitScaleValueEl, 0.01, 1.0, 2
 makeSliderPair(analyserSmoothingSlider, analyserSmoothingValueEl, 0, 1.0, 2);
 makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
 
-function setPanHoldFloor(nextFloor) {
-  const clamped = Math.max(0, Math.min(1, nextFloor));
-  if (Math.abs(panHoldFloor - clamped) < DIVISION_EPSILON) return;
-  panHoldFloor = clamped;
+function setPanLockRatio(nextRatio) {
+  const clamped = Math.max(0, Math.min(1, nextRatio));
+  if (Math.abs(panLockRatio - clamped) < DIVISION_EPSILON) return;
+  panLockRatio = clamped;
   drawVisualizer();
 }
 
-panHoldFloorSlider.addEventListener('input', () => {
-  setPanHoldFloor(Number(panHoldFloorSlider.value));
+panLockSlider.addEventListener('input', () => {
+  setPanLockRatio(Number(panLockSlider.value));
 });
 
-panHoldFloorValueEl.addEventListener('change', () => {
+panLockValueEl.addEventListener('change', () => {
   // makeSliderPair clamps the value first, so read from slider for canonical state.
-  setPanHoldFloor(Number(panHoldFloorSlider.value));
-});
-
-function setPanMinUpdatePoints(nextPoints) {
-  const clamped = Math.max(0, Math.min(25, nextPoints));
-  if (Math.abs(panMinUpdatePoints - clamped) < DIVISION_EPSILON) return;
-  panMinUpdatePoints = clamped;
-  drawVisualizer();
-}
-
-panMinUpdateSlider.addEventListener('input', () => {
-  setPanMinUpdatePoints(Number(panMinUpdateSlider.value));
-});
-
-panMinUpdateValueEl.addEventListener('change', () => {
-  // makeSliderPair clamps the value first, so read from slider for canonical state.
-  setPanMinUpdatePoints(Number(panMinUpdateSlider.value));
+  setPanLockRatio(Number(panLockSlider.value));
 });
 
 function setWidthLevelBoostRatio(nextRatio) {

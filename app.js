@@ -220,7 +220,7 @@ let wasPlaying = false;
 let isPanDisplayLineVisible = true;
 let isDbDisplayLineVisible = true;
 let isBinauralPanDisplayActive = false;
-let isAutoFitHeight = false;
+let isAutoFitHeight = true;
 let isAutoFitHeightCalibrating = false;
 let autoFitBaseScale = 0;   // fittedScale from analysis; 0 until first run
 let fitScaleRatio = 1.0;    // fraction of base fit [0.01, 1.0]; persists across toggles
@@ -250,15 +250,35 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function setButtonsLockedWhileFitting(isLocked) {
+  const buttons = document.querySelectorAll('button');
+  for (let i = 0; i < buttons.length; i += 1) {
+    const button = buttons[i];
+    if (button === waveHeightAutoFitBtn) continue;
+    if (isLocked) {
+      if (!button.hasAttribute('data-fit-lock-prev-disabled')) {
+        button.setAttribute('data-fit-lock-prev-disabled', button.disabled ? '1' : '0');
+      }
+      button.disabled = true;
+      continue;
+    }
+    if (!button.hasAttribute('data-fit-lock-prev-disabled')) continue;
+    const wasDisabled = button.getAttribute('data-fit-lock-prev-disabled') === '1';
+    button.disabled = wasDisabled;
+    button.removeAttribute('data-fit-lock-prev-disabled');
+  }
+}
+
 function updateWaveHeightAutoFitToggleState() {
   const isActive = isAutoFitHeight;
   const statusText = isActive
     ? (isAutoFitHeightCalibrating ? 'Fitting...' : 'On')
     : 'Off';
-  waveHeightAutoFitBtn.textContent = `Wave Height Fit: ${statusText}`;
+  waveHeightAutoFitBtn.textContent = `Fit Wave Height: ${statusText}`;
   waveHeightAutoFitBtn.classList.toggle('is-active', isActive);
   waveHeightAutoFitBtn.classList.toggle('is-calibrating', isActive && isAutoFitHeightCalibrating);
   waveHeightAutoFitBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  setButtonsLockedWhileFitting(isActive && isAutoFitHeightCalibrating);
   // Fit On: lock original scale (auto-managed), unlock fit scale ratio slider.
   // Fit Off: unlock original scale, lock fit scale ratio slider (meaningless without fit).
   waveHeightScaleLabel.classList.toggle('ctrl-label--locked', isActive);

@@ -214,7 +214,6 @@ body {
 .fo-header {
   font-size: 0.62rem;
   color: #6a7d8e;
-  text-transform: lowercase;
   letter-spacing: 0.04em;
   padding: 0 0 0.35rem 0.75rem;
   border-bottom: 1px solid #2f3944;

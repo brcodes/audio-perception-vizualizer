@@ -19,6 +19,7 @@ const waveHeightScaleValueEl = document.getElementById('waveHeightScaleValue');
 const panEdgeFadeSlider = document.getElementById('panEdgeFadeSlider');
 const panEdgeFadeValueEl = document.getElementById('panEdgeFadeValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
+const toggleDbLineBtn = document.getElementById('toggleDbLineBtn');
 const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
@@ -204,6 +205,7 @@ let isDocumentHidden = false;
 let isScrubbing = false;
 let wasPlaying = false;
 let isPanDisplayLineVisible = true;
+let isDbDisplayLineVisible = true;
 let isBinauralPanDisplayActive = false;
 let isHeightNormalized = false;
 let isHeightNormalizationCalibrating = false;
@@ -476,6 +478,21 @@ function drawPanDisplayLine(centerX, centerY, radius) {
     const x = centerX + (panPoint / 100) * radius;
     ctx.fillText(panPoint.toString(), x, centerY + PAN_DISPLAY_NOTCH_HALF_HEIGHT + 2);
   }
+
+  // When the dB line is hidden, render pan-only origin labels at the same two positions
+  // the dB line uses, mirroring the dB-only fallback labels that appear when pan is hidden.
+  if (!isDbDisplayLineVisible) {
+    ctx.fillStyle = 'rgba(110, 110, 110, 0.75)';
+    ctx.font = '9px monospace';
+    // Center value '(0)' — sits right of the 'p' axis label, both below the pan line.
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    ctx.fillText('(0)', centerX + 5, centerY + 5);
+    // Axis label 'p' — mirrors 'db' in dB-only mode.
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'right';
+    ctx.fillText('p', centerX - 5, centerY + 5);
+  }
 }
 
 function drawDbDisplayLine(centerX, centerY, radius) {
@@ -530,8 +547,9 @@ function drawDbDisplayLine(centerX, centerY, radius) {
     ctx.textBaseline = 'bottom';
     ctx.fillText('(0, -100)', centerX + 3, centerY - 3);
   } else {
-    ctx.textBaseline = 'middle';
-    ctx.fillText(Math.round(minDb).toString(), centerX + DB_DISPLAY_NOTCH_HALF_WIDTH + 3, centerY);
+    // dB-only: numeric value sits right of the 'db' axis label, both below the pan line position.
+    ctx.textBaseline = 'top';
+    ctx.fillText('(' + Math.round(minDb).toString() + ')', centerX + 5, centerY + 5);
   }
 
   // Axis label: mirrored position — top-right corner of the bottom-left quadrant.
@@ -539,7 +557,7 @@ function drawDbDisplayLine(centerX, centerY, radius) {
   ctx.font = '9px monospace';
   ctx.textBaseline = 'top';
   ctx.textAlign = 'right';
-  ctx.fillText(isPanDisplayLineVisible ? '(p, db)' : 'db', centerX - 3, centerY + 5);
+  ctx.fillText(isPanDisplayLineVisible ? '(p, db)' : 'db', centerX - 5, centerY + 5);
 }
 
 function drawVisualizer() {
@@ -651,7 +669,9 @@ function drawVisualizer() {
     drawPanDisplayLine(cx, cy, halfSize);
   }
 
-  drawDbDisplayLine(cx, cy, halfSize);
+  if (isDbDisplayLineVisible) {
+    drawDbDisplayLine(cx, cy, halfSize);
+  }
 
   ctx.restore();
 }
@@ -761,6 +781,12 @@ function updatePanLineToggleState() {
   togglePanLineBtn.textContent = isPanDisplayLineVisible ? 'Pan Line: On' : 'Pan Line: Off';
   togglePanLineBtn.classList.toggle('is-active', isPanDisplayLineVisible);
   togglePanLineBtn.setAttribute('aria-pressed', isPanDisplayLineVisible ? 'true' : 'false');
+}
+
+function updateDbLineToggleState() {
+  toggleDbLineBtn.textContent = isDbDisplayLineVisible ? 'dB Line: On' : 'dB Line: Off';
+  toggleDbLineBtn.classList.toggle('is-active', isDbDisplayLineVisible);
+  toggleDbLineBtn.setAttribute('aria-pressed', isDbDisplayLineVisible ? 'true' : 'false');
 }
 
 function updateBinauralPanToggleState() {
@@ -877,6 +903,11 @@ playPauseBtn.addEventListener('click', () => togglePlayPause());
 togglePanLineBtn.addEventListener('click', () => {
   isPanDisplayLineVisible = !isPanDisplayLineVisible;
   updatePanLineToggleState();
+  drawVisualizer();
+});
+toggleDbLineBtn.addEventListener('click', () => {
+  isDbDisplayLineVisible = !isDbDisplayLineVisible;
+  updateDbLineToggleState();
   drawVisualizer();
 });
 binauralPanBtn.addEventListener('click', () => {
@@ -1083,6 +1114,7 @@ window.addEventListener('resize', () => {
 });
 
 updatePanLineToggleState();
+updateDbLineToggleState();
 updateNormalizeHeightToggleState();
 updateBandModeButtons();
 updateFrequencyOrganizer();

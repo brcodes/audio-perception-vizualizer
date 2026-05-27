@@ -20,10 +20,12 @@ body {
   width: 100%;
   min-height: 100%;
   display: grid;
+  grid-template-columns: 1fr auto;
   grid-template-rows: auto auto 1fr;
 }
 
 .controls {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -86,6 +88,7 @@ body {
 }
 
 .seekbar {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -186,9 +189,110 @@ body {
 }
 
 #vizCanvas {
+  grid-column: 1;
+  grid-row: 3;
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* ─── FREQUENCY ORGANIZER ─── */
+
+.frequency-organizer {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  background: #1a2129;
+  border-left: 1px solid #2f3944;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  min-width: 108px;
+  max-width: 148px;
+  overflow: hidden;
+}
+
+.fo-header {
+  font-size: 0.62rem;
+  color: #6a7d8e;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  padding: 0 0 0.35rem 0.75rem;
+  border-bottom: 1px solid #2f3944;
+  margin-bottom: 0.3rem;
+  flex-shrink: 0;
+}
+
+.fo-line-container {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* the vertical spine line */
+.fo-line-container::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #3a4858;
+  pointer-events: none;
+}
+
+.fo-notches {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  height: 100%;
+  padding-left: 11px;
+  min-height: 0;
+}
+
+.fo-notch-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1;
+  max-height: 32px;
+}
+
+.fo-tick {
+  width: 9px;
+  height: 1px;
+  background: #3a4858;
+  flex-shrink: 0;
+}
+
+.fo-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #8a9baa;
+  font-size: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* center divider notch */
+.fo-divider .fo-tick {
+  background: #5a6e80;
+}
+
+.fo-divider .fo-label {
+  color: #c8d8e4;
+  font-weight: 500;
+  font-size: 1.3em;
 }
 
 .ctrl-label {

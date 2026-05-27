@@ -22,6 +22,7 @@ const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
+const foNotches = document.getElementById('foNotches');
 const ctx = canvas.getContext('2d');
 
 const DIVISION_EPSILON = 1e-6;
@@ -778,11 +779,97 @@ function updateBandModeButtons() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FREQUENCY ORGANIZER LINE
+// Builds and updates the right-panel organizer: one notch per band, ordered
+// top-to-bottom by pitch (high → dividing pitch → low), mirroring the visual
+// z-order of the canvas (center = front, extremes = back).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Format a Hz value compactly: "440Hz", "1.5kHz", "10kHz".
+function formatBandHz(hz) {
+  if (hz >= 10000) return Math.round(hz / 1000) + 'kHz';
+  if (hz >= 1000) return (hz / 1000).toFixed(1) + 'kHz';
+  return Math.round(hz) + 'Hz';
+}
+
+// Build one color-notch row for a regular band.
+function createNotchRow(band) {
+  const tooltip = formatBandHz(band.hz) +
+    ' (' + Math.round(band.minHz) + '\u2013' + Math.round(band.maxHz) + 'Hz)';
+  const row = document.createElement('div');
+  row.className = 'fo-notch-row';
+  row.title = tooltip;
+
+  const tick = document.createElement('div');
+  tick.className = 'fo-tick';
+
+  const label = document.createElement('span');
+  label.className = 'fo-label';
+  label.textContent = formatBandHz(band.hz);
+
+  const swatch = document.createElement('div');
+  swatch.className = 'fo-swatch';
+  swatch.style.background =
+    'rgb(' + band.rgb.r + ',' + band.rgb.g + ',' + band.rgb.b + ')';
+
+  row.appendChild(tick);
+  row.appendChild(label);
+  row.appendChild(swatch);
+  return row;
+}
+
+// Build the center divider row: bigger label in parens, no color swatch.
+function createDividerRow(band) {
+  const row = document.createElement('div');
+  row.className = 'fo-notch-row fo-divider';
+  row.title = 'Dividing pitch: ' + formatBandHz(band.hz);
+
+  const tick = document.createElement('div');
+  tick.className = 'fo-tick';
+
+  const label = document.createElement('span');
+  label.className = 'fo-label';
+  label.textContent = '(' + formatBandHz(band.hz) + ')';
+
+  row.appendChild(tick);
+  row.appendChild(label);
+  return row;
+}
+
+// Rebuild the organizer panel to reflect the current activeBandProfile.
+// Called once on init and again whenever the band mode changes.
+function updateFrequencyOrganizer() {
+  // Clear existing notches without innerHTML
+  while (foNotches.firstChild) foNotches.removeChild(foNotches.firstChild);
+
+  const { topBands, bottomBands } = activeBandProfile;
+  const totalBands = topBands.length + bottomBands.length;
+
+  // Adaptive font size: stays readable from 7 bands down to 99
+  const fontSize = Math.max(7, Math.min(13, Math.floor(600 / totalBands)));
+  foNotches.style.fontSize = fontSize + 'px';
+
+  // Top half: highest pitch (back) → second-from-center (near front)
+  for (let i = topBands.length - 1; i >= 1; i -= 1) {
+    foNotches.appendChild(createNotchRow(topBands[i]));
+  }
+
+  // Center: the dividing pitch (topBands[0] === bands[splitIndex])
+  foNotches.appendChild(createDividerRow(topBands[0]));
+
+  // Bottom half: highest-bottom pitch (near front) → lowest pitch (back)
+  for (let i = bottomBands.length - 1; i >= 0; i -= 1) {
+    foNotches.appendChild(createNotchRow(bottomBands[i]));
+  }
+}
+
 function setBandMode(nextMode) {
   if (!BAND_MODE_KEYS.includes(nextMode) || nextMode === activeBandMode) return;
   activeBandMode = nextMode;
   activeBandProfile = BAND_PROFILES[nextMode];
   updateBandModeButtons();
+  updateFrequencyOrganizer();
   drawVisualizer();
 }
 
@@ -998,6 +1085,7 @@ window.addEventListener('resize', () => {
 updatePanLineToggleState();
 updateNormalizeHeightToggleState();
 updateBandModeButtons();
+updateFrequencyOrganizer();
 resizeCanvas();
 drawVisualizer();
 

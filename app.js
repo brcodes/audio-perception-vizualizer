@@ -16,11 +16,17 @@ const waveWidthScaleSlider = document.getElementById('waveWidthScaleSlider');
 const waveWidthScaleValueEl = document.getElementById('waveWidthScaleValue');
 const waveHeightScaleSlider = document.getElementById('waveHeightScaleSlider');
 const waveHeightScaleValueEl = document.getElementById('waveHeightScaleValue');
+const waveHeightScaleLabel = document.getElementById('waveHeightScaleLabel');
 const panEdgeFadeSlider = document.getElementById('panEdgeFadeSlider');
 const panEdgeFadeValueEl = document.getElementById('panEdgeFadeValue');
 const togglePanLineBtn = document.getElementById('togglePanLineBtn');
 const toggleDbLineBtn = document.getElementById('toggleDbLineBtn');
-const normalizeHeightBtn = document.getElementById('normalizeHeightBtn');
+const waveHeightFitScaleSlider = document.getElementById('waveHeightFitScaleSlider');
+const waveHeightFitScaleValueEl = document.getElementById('waveHeightFitScaleValue');
+const waveHeightFitScaleLabel = document.getElementById('waveHeightFitScaleLabel');
+const waveHeightAutoFitBtn = document.getElementById('waveHeightAutoFitBtn');
+const analyserSmoothingSlider = document.getElementById('analyserSmoothingSlider');
+const analyserSmoothingValueEl = document.getElementById('analyserSmoothingValue');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const foNotches = document.getElementById('foNotches');
@@ -55,15 +61,15 @@ const BASE_LINE_WIDTH_PX = 1.25;
 const ANALYSER_FIXED_MAX_DB = -30;
 // Shared dB span keeps low-level material visible without crushing loud transients.
 const ANALYSER_DYNAMIC_RANGE_DB = 70;
-const ANALYSER_HEADROOM_DB = 1;
-// 3 dB below full scale gives tight headroom so a track's own peak → 255 in Option B (Normalize Height On).
-const MAX_ANALYSER_MAX_DB = -3;
-const MIN_ANALYSER_MAX_DB = -50;
+// Default IIR smoothing applied on top of the inherent ~186ms FFT window integration.
+// 0 = instantaneous (jittery), 1 = fully frozen; 0.3 (~14ms at 60fps) balances
+// responsiveness against per-frame noise without masking transients.
+const DEFAULT_ANALYSER_SMOOTHING = 0.3;
 // Side bleed lets hard-panned shapes complete without inventing pan points beyond +/-100.
 const PAN_EDGE_BLEED_PX = 200;
 // 0 = no masking (bleed fully visible); 1 = hard cutoff right at the ±100 edge.
 // Intermediate values start the fade at that opacity at ±100 and ramp to fully opaque at the clip edge.
-let panEdgeFadeIntensity = 1.0;
+let panEdgeFadeIntensity = Number(panEdgeFadeSlider.value);
 const EDGE_FADE_SOLID = 'rgba(22, 29, 37, 1)';
 // Tiny center deadband keeps front-center visually stable against micro L/R noise.
 const PAN_CENTER_DEADBAND_POINTS = DIVISION_EPSILON;
@@ -207,8 +213,10 @@ let wasPlaying = false;
 let isPanDisplayLineVisible = true;
 let isDbDisplayLineVisible = true;
 let isBinauralPanDisplayActive = false;
-let isHeightNormalized = false;
-let isHeightNormalizationCalibrating = false;
+let isAutoFitHeight = false;
+let isAutoFitHeightCalibrating = false;
+let autoFitBaseScale = 0;   // fittedScale from analysis; 0 until first run
+let fitScaleRatio = 1.0;    // fraction of base fit [0.01, 1.0]; persists across toggles
 let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
 let waveWidthScale = DEFAULT_WAVE_WIDTH_SCALE;
 let waveHeightScale = DEFAULT_WAVE_HEIGHT_SCALE;
@@ -222,75 +230,147 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function setAnalyserScale(maxDb) {
-  if (!analyserLeft || !analyserRight) return;
-  const minDb = maxDb - ANALYSER_DYNAMIC_RANGE_DB;
-  analyserLeft.minDecibels = minDb;
-  analyserRight.minDecibels = minDb;
-  analyserLeft.maxDecibels = maxDb;
-  analyserRight.maxDecibels = maxDb;
-}
-
-function applyFixedAnalyserScale() {
-  setAnalyserScale(ANALYSER_FIXED_MAX_DB);
-}
-
-function updateNormalizeHeightToggleState() {
-  const isActive = isHeightNormalized;
+function updateWaveHeightAutoFitToggleState() {
+  const isActive = isAutoFitHeight;
   const statusText = isActive
-    ? (isHeightNormalizationCalibrating ? 'Calibrating...' : 'On')
+    ? (isAutoFitHeightCalibrating ? 'Fitting...' : 'On')
     : 'Off';
-  normalizeHeightBtn.textContent = `Normalize Height: ${statusText}`;
-  normalizeHeightBtn.classList.toggle('is-active', isActive);
-  normalizeHeightBtn.classList.toggle('is-calibrating', isActive && isHeightNormalizationCalibrating);
-  normalizeHeightBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  waveHeightAutoFitBtn.textContent = `Fit Wave Height: ${statusText}`;
+  waveHeightAutoFitBtn.classList.toggle('is-active', isActive);
+  waveHeightAutoFitBtn.classList.toggle('is-calibrating', isActive && isAutoFitHeightCalibrating);
+  waveHeightAutoFitBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  // Fit On: lock original scale (auto-managed), unlock fit scale ratio slider.
+  // Fit Off: unlock original scale, lock fit scale ratio slider (meaningless without fit).
+  waveHeightScaleLabel.classList.toggle('ctrl-label--locked', isActive);
+  waveHeightScaleSlider.disabled = isActive;
+  waveHeightScaleValueEl.disabled = isActive;
+  const scaleNudgeBtns = document.querySelectorAll('.nudge-btn[data-target="waveHeightScaleSlider"]');
+  for (let i = 0; i < scaleNudgeBtns.length; i += 1) {
+    scaleNudgeBtns[i].disabled = isActive;
+  }
+  waveHeightFitScaleLabel.classList.toggle('ctrl-label--locked', !isActive);
+  waveHeightFitScaleSlider.disabled = !isActive;
+  waveHeightFitScaleValueEl.disabled = !isActive;
+  const fitNudgeBtns = document.querySelectorAll('.nudge-btn[data-target="waveHeightFitScaleSlider"]');
+  for (let i = 0; i < fitNudgeBtns.length; i += 1) {
+    fitNudgeBtns[i].disabled = !isActive;
+  }
 }
 
-function setNormalizeHeightCalibrating(isCalibrating) {
-  if (isHeightNormalizationCalibrating === isCalibrating) return;
-  isHeightNormalizationCalibrating = isCalibrating;
-  updateNormalizeHeightToggleState();
+function setAutoFitHeightCalibrating(isCalibrating) {
+  if (isAutoFitHeightCalibrating === isCalibrating) return;
+  isAutoFitHeightCalibrating = isCalibrating;
+  updateWaveHeightAutoFitToggleState();
 }
 
-async function analyzeAndCalibrateAnalysers(file) {
-  if (!file || !isHeightNormalized) return;
+function applyAutoFitScale() {
+  if (!isAutoFitHeight || autoFitBaseScale <= DIVISION_EPSILON) return;
+  const effective = Math.max(
+    Number(waveHeightScaleSlider.min),
+    Math.min(Number(waveHeightScaleSlider.max), autoFitBaseScale * fitScaleRatio),
+  );
+  waveHeightScaleSlider.value = effective;
+  waveHeightScaleValueEl.value = effective.toFixed(2);
+  waveHeightScale = effective;
+  drawVisualizer();
+}
+
+async function analyzeAndAutoFitWaveHeight(file) {
+  if (!file || !isAutoFitHeight) return;
   ensureAudioGraph();
   const generation = ++analysisGeneration;
-  setNormalizeHeightCalibrating(true);
+  setAutoFitHeightCalibrating(true);
   try {
     const arrayBuffer = await file.arrayBuffer();
-    if (generation !== analysisGeneration || !isHeightNormalized) return;
+    if (generation !== analysisGeneration || !isAutoFitHeight) return;
 
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-    if (generation !== analysisGeneration || !isHeightNormalized) return;
+    if (generation !== analysisGeneration || !isAutoFitHeight) return;
 
-    let peakAmp = 0;
-    for (let ch = 0; ch < audioBuffer.numberOfChannels; ch += 1) {
-      const channelData = audioBuffer.getChannelData(ch);
-      for (let i = 0; i < channelData.length; i += 1) {
-        const sample = Math.abs(channelData[i]);
-        if (sample > peakAmp) peakAmp = sample;
+    const { sampleRate, length } = audioBuffer;
+    // Always render as 2-channel so the splitter receives a proper stereo signal.
+    const offlineCtx = new OfflineAudioContext(2, length, sampleRate);
+    const offSource = offlineCtx.createBufferSource();
+    offSource.buffer = audioBuffer;
+
+    const offSplitter = offlineCtx.createChannelSplitter(2);
+    const offAnlLeft = offlineCtx.createAnalyser();
+    const offAnlRight = offlineCtx.createAnalyser();
+    offAnlLeft.fftSize = 8192;
+    offAnlRight.fftSize = 8192;
+    // Match live playback smoothing so effectiveMax is on the same temporal scale as the display.
+    const offSmoothing = Number(analyserSmoothingSlider.value);
+    offAnlLeft.smoothingTimeConstant = offSmoothing;
+    offAnlRight.smoothingTimeConstant = offSmoothing;
+    // Match the fixed playback dB range so energy values are on the same scale.
+    const fixedMinDb = ANALYSER_FIXED_MAX_DB - ANALYSER_DYNAMIC_RANGE_DB;
+    offAnlLeft.minDecibels = fixedMinDb;
+    offAnlRight.minDecibels = fixedMinDb;
+    offAnlLeft.maxDecibels = ANALYSER_FIXED_MAX_DB;
+    offAnlRight.maxDecibels = ANALYSER_FIXED_MAX_DB;
+
+    // ScriptProcessorNode onaudioprocess fires on the main thread for each rendered block,
+    // giving us a hook to sample the AnalyserNode output during offline rendering.
+    const offMerger = offlineCtx.createChannelMerger(2);
+    const offProcessor = offlineCtx.createScriptProcessor(4096, 2, 2);
+
+    const lBuf = new Uint8Array(offAnlLeft.frequencyBinCount);
+    const rBuf = new Uint8Array(offAnlRight.frequencyBinCount);
+    let maxEnergy = 0;
+    // Evaluate every band in the active profile so the fit covers the actual draw pass.
+    const { topBands, bottomBands } = BAND_PROFILES[activeBandMode];
+    const allBands = topBands.concat(bottomBands);
+
+    offProcessor.onaudioprocess = () => {
+      offAnlLeft.getByteFrequencyData(lBuf);
+      offAnlRight.getByteFrequencyData(rBuf);
+      for (let i = 0; i < allBands.length; i += 1) {
+        const band = allBands[i];
+        const l = getBandEnergy(lBuf, band.minHz, band.maxHz, sampleRate);
+        const r = getBandEnergy(rBuf, band.minHz, band.maxHz, sampleRate);
+        const energy = (l + r) / 2;
+        if (energy > maxEnergy) maxEnergy = energy;
       }
-    }
+    };
 
-    if (peakAmp <= DIVISION_EPSILON) {
-      setAnalyserScale(MIN_ANALYSER_MAX_DB);
-      return;
-    }
+    // Graph: source → splitter → analysers → merger → processor → destination.
+    offSource.connect(offSplitter);
+    offSplitter.connect(offAnlLeft, 0);
+    offSplitter.connect(offAnlRight, 1);
+    offAnlLeft.connect(offMerger, 0, 0);
+    offAnlRight.connect(offMerger, 0, 1);
+    offMerger.connect(offProcessor);
+    offProcessor.connect(offlineCtx.destination);
+    offSource.start(0);
+    await offlineCtx.startRendering();
 
-    const peakDb = 20 * Math.log10(peakAmp);
-    const targetMaxDb = Math.max(
-      MIN_ANALYSER_MAX_DB,
-      Math.min(MAX_ANALYSER_MAX_DB, peakDb + ANALYSER_HEADROOM_DB),
+    if (generation !== analysisGeneration || !isAutoFitHeight) return;
+
+    // If onaudioprocess never fired (rare in some environments), fall back to worst-case
+    // scale: energy=1.0 is the absolute ceiling, so the scale still guarantees no overflow.
+    const effectiveMax = maxEnergy > DIVISION_EPSILON ? maxEnergy : 1.0;
+    // Place the peak wave at 95% of the half-height boundary (5% clear headroom).
+    const fittedScale = 0.95 / (effectiveMax * PEAK_HEIGHT_FACTOR);
+    const clampedScale = Math.max(
+      Number(waveHeightScaleSlider.min),
+      Math.min(Number(waveHeightScaleSlider.max), fittedScale),
     );
-    setAnalyserScale(targetMaxDb);
+    // Store the base fitted scale; apply with fit scale ratio on top.
+    // Slider is locked so no 'input' event fires — sync field directly.
+    autoFitBaseScale = clampedScale;
+    const effectiveScale = Math.max(
+      Number(waveHeightScaleSlider.min),
+      Math.min(Number(waveHeightScaleSlider.max), autoFitBaseScale * fitScaleRatio),
+    );
+    waveHeightScaleSlider.value = effectiveScale;
+    waveHeightScaleValueEl.value = effectiveScale.toFixed(2);
+    waveHeightScale = effectiveScale;
   } catch (error) {
-    // Keep the app interactive if decode/calibration fails for any reason.
-    console.error('Waveform height normalization failed:', error);
-    if (isHeightNormalized) applyFixedAnalyserScale();
+    // Keep the app interactive if analysis fails for any reason.
+    console.error('Wave height auto-fit analysis failed:', error);
   } finally {
-    if (generation === analysisGeneration && isHeightNormalized) {
-      setNormalizeHeightCalibrating(false);
+    if (generation === analysisGeneration && isAutoFitHeight) {
+      setAutoFitHeightCalibrating(false);
       drawVisualizer();
     }
   }
@@ -305,9 +385,13 @@ function ensureAudioGraph() {
   analyserRight = audioContext.createAnalyser();
   analyserLeft.fftSize = 8192;
   analyserRight.fftSize = 8192;
-  analyserLeft.smoothingTimeConstant = 0.8;
-  analyserRight.smoothingTimeConstant = 0.8;
-  applyFixedAnalyserScale();
+  analyserLeft.smoothingTimeConstant = Number(analyserSmoothingSlider.value);
+  analyserRight.smoothingTimeConstant = Number(analyserSmoothingSlider.value);
+  const fixedMinDb = ANALYSER_FIXED_MAX_DB - ANALYSER_DYNAMIC_RANGE_DB;
+  analyserLeft.minDecibels = fixedMinDb;
+  analyserRight.minDecibels = fixedMinDb;
+  analyserLeft.maxDecibels = ANALYSER_FIXED_MAX_DB;
+  analyserRight.maxDecibels = ANALYSER_FIXED_MAX_DB;
   leftData = new Uint8Array(analyserLeft.frequencyBinCount);
   rightData = new Uint8Array(analyserRight.frequencyBinCount);
 
@@ -496,9 +580,8 @@ function drawPanDisplayLine(centerX, centerY, radius) {
 }
 
 function drawDbDisplayLine(centerX, centerY, radius) {
-  // Read current analyser dB range so the scale stays accurate when normalization is active.
-  const maxDb = analyserLeft ? analyserLeft.maxDecibels : ANALYSER_FIXED_MAX_DB;
-  const minDb = analyserLeft ? analyserLeft.minDecibels : (ANALYSER_FIXED_MAX_DB - ANALYSER_DYNAMIC_RANGE_DB);
+  const maxDb = ANALYSER_FIXED_MAX_DB;
+  const minDb = ANALYSER_FIXED_MAX_DB - ANALYSER_DYNAMIC_RANGE_DB;
   const dynamicRange = maxDb - minDb;
 
   ctx.strokeStyle = DB_DISPLAY_LINE_COLOR;
@@ -712,10 +795,8 @@ fileInput.addEventListener('change', async (event) => {
 
   currentFile = file;
   analysisGeneration += 1;
-  setNormalizeHeightCalibrating(false);
   ensureAudioGraph();
   if (audioContext.state === 'suspended') await audioContext.resume();
-  applyFixedAnalyserScale();
   for (const key of BAND_MODE_KEYS) BAND_PROFILES[key].panSmoothed.fill(0);
 
   if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -732,7 +813,7 @@ fileInput.addEventListener('change', async (event) => {
   seekSlider.disabled = true;
   currentTimeEl.textContent = '0:00';
   totalTimeEl.textContent = '0:00';
-  if (isHeightNormalized) analyzeAndCalibrateAnalysers(file);
+  if (isAutoFitHeight) analyzeAndAutoFitWaveHeight(file);
 });
 
 async function togglePlayPause() {
@@ -751,29 +832,26 @@ async function togglePlayPause() {
   }
 }
 
-function toggleNormalizeHeight() {
-  isHeightNormalized = !isHeightNormalized;
-  audio.pause();
-  playPauseBtn.textContent = 'Play';
-  stopAnimation();
+function toggleAutoFitHeight() {
+  isAutoFitHeight = !isAutoFitHeight;
 
-  if (!isHeightNormalized) {
+  if (!isAutoFitHeight) {
     analysisGeneration += 1;
-    setNormalizeHeightCalibrating(false);
-    applyFixedAnalyserScale();
-    updateNormalizeHeightToggleState();
+    autoFitBaseScale = 0;
+    setAutoFitHeightCalibrating(false);
+    updateWaveHeightAutoFitToggleState();
     drawVisualizer();
     return;
   }
 
   if (!currentFile) {
-    updateNormalizeHeightToggleState();
+    updateWaveHeightAutoFitToggleState();
     drawVisualizer();
     return;
   }
 
-  analyzeAndCalibrateAnalysers(currentFile);
-  updateNormalizeHeightToggleState();
+  analyzeAndAutoFitWaveHeight(currentFile);
+  updateWaveHeightAutoFitToggleState();
   drawVisualizer();
 }
 
@@ -915,8 +993,8 @@ binauralPanBtn.addEventListener('click', () => {
   updateBinauralPanToggleState();
   drawVisualizer();
 });
-normalizeHeightBtn.addEventListener('click', () => {
-  toggleNormalizeHeight();
+waveHeightAutoFitBtn.addEventListener('click', () => {
+  toggleAutoFitHeight();
 });
 for (let i = 0; i < bandModeButtons.length; i += 1) {
   const button = bandModeButtons[i];
@@ -1011,6 +1089,8 @@ makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
 makeSliderPair(widthBoostSlider, widthBoostValueEl, 0, 1.0, 2);
 makeSliderPair(waveWidthScaleSlider, waveWidthScaleValueEl, 0.25, 10.0, 2);
 makeSliderPair(waveHeightScaleSlider, waveHeightScaleValueEl, 0.25, 10.0, 2);
+makeSliderPair(waveHeightFitScaleSlider, waveHeightFitScaleValueEl, 0.01, 1.0, 2);
+makeSliderPair(analyserSmoothingSlider, analyserSmoothingValueEl, 0, 1.0, 2);
 makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
 
 function setWidthLevelBoostRatio(nextRatio) {
@@ -1059,6 +1139,30 @@ waveHeightScaleSlider.addEventListener('input', () => {
 waveHeightScaleValueEl.addEventListener('change', () => {
   // makeSliderPair clamps the value first, so read from slider for canonical state.
   setWaveHeightScale(Number(waveHeightScaleSlider.value));
+});
+
+waveHeightFitScaleSlider.addEventListener('input', () => {
+  fitScaleRatio = Number(waveHeightFitScaleSlider.value);
+  applyAutoFitScale();
+});
+
+waveHeightFitScaleValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  fitScaleRatio = Number(waveHeightFitScaleSlider.value);
+  applyAutoFitScale();
+});
+
+analyserSmoothingSlider.addEventListener('input', () => {
+  const smoothing = Number(analyserSmoothingSlider.value);
+  if (analyserLeft) analyserLeft.smoothingTimeConstant = smoothing;
+  if (analyserRight) analyserRight.smoothingTimeConstant = smoothing;
+});
+
+analyserSmoothingValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  const smoothing = Number(analyserSmoothingSlider.value);
+  if (analyserLeft) analyserLeft.smoothingTimeConstant = smoothing;
+  if (analyserRight) analyserRight.smoothingTimeConstant = smoothing;
 });
 
 panEdgeFadeSlider.addEventListener('input', () => {
@@ -1115,7 +1219,7 @@ window.addEventListener('resize', () => {
 
 updatePanLineToggleState();
 updateDbLineToggleState();
-updateNormalizeHeightToggleState();
+updateWaveHeightAutoFitToggleState();
 updateBandModeButtons();
 updateFrequencyOrganizer();
 resizeCanvas();
@@ -1126,7 +1230,6 @@ drawVisualizer();
   if (file && isMp3File(file)) {
     currentFile = file;
     ensureAudioGraph();
-    applyFixedAnalyserScale();
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(file);
     audio.src = objectUrl;
@@ -1134,7 +1237,7 @@ drawVisualizer();
     audio.pause();
     playPauseBtn.disabled = false;
     playPauseBtn.textContent = 'Play';
-    if (isHeightNormalized) analyzeAndCalibrateAnalysers(file);
+    if (isAutoFitHeight) analyzeAndAutoFitWaveHeight(file);
   } else {
     currentFile = undefined;
     fileInput.value = '';

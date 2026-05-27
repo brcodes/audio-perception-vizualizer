@@ -66,11 +66,11 @@ body {
   color: #8a9baa;
 }
 
-#normalizeHeightBtn {
-  min-width: 11.5rem;
+#waveHeightAutoFitBtn {
+  min-width: 10.5rem;
 }
 
-#normalizeHeightBtn.is-calibrating {
+#waveHeightAutoFitBtn.is-calibrating {
   border-color: #73879a;
   color: #d6e1eb;
 }
@@ -145,6 +145,39 @@ body {
 
 .nudge-btn:active {
   background: #3c4752;
+}
+
+.nudge-btn:disabled {
+  opacity: 0.28;
+  color: #4a5a68;
+  background: #0e1318;
+  border-color: #2a3340;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ctrl-slider:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ctrl-slider:disabled::-webkit-slider-thumb {
+  background: #3a4858;
+  cursor: not-allowed;
+}
+
+.ctrl-slider:disabled::-moz-range-thumb {
+  background: #3a4858;
+  cursor: not-allowed;
+}
+
+.ctrl-value-input:disabled {
+  opacity: 0.28;
+  color: #4a5a68;
+  background: #0e1318;
+  border-color: #2a3340;
+  cursor: not-allowed;
 }
 
 #seekSlider {
@@ -298,6 +331,11 @@ body {
   font-size: 0.78rem;
   color: #8a9baa;
   white-space: nowrap;
+}
+
+.ctrl-label--locked {
+  opacity: 0.28;
+  color: #4a5a68;
 }
 
 input.ctrl-value-input {

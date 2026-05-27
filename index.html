@@ -19,8 +19,8 @@
         Line: On</button>
       <button id="toggleDbLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle dB display line"
         aria-pressed="true">dB Line: On</button>
-      <button id="waveHeightAutoFitBtn" type="button" class="toggle-btn" aria-label="Toggle fit wave height"
-        aria-pressed="false">Fit Wave Height: Off</button>
+      <button id="waveHeightAutoFitBtn" type="button" class="toggle-btn" aria-label="Toggle wave height fit"
+        aria-pressed="false">Wave Height Fit: Off</button>
       <button id="binauralPanBtn" type="button" class="toggle-btn" aria-label="Toggle binaural pan display"
         aria-pressed="false">Binaural Pan: Off</button>
       <span class="ctrl-label">Bands</span>
@@ -71,7 +71,7 @@
       </span>
       <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.29"
         class="ctrl-value-input" aria-label="Line thickness value" />
-      <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (by Amp) Level</label>
+      <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (Height-Based)</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="widthBoostSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease wave width boost level">−</button>
@@ -104,8 +104,8 @@
       </span>
       <input id="waveHeightScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="1.35"
         class="ctrl-value-input" aria-label="Wave height scale value" />
-      <label id="waveHeightFitScaleLabel" for="waveHeightFitScaleSlider" class="ctrl-label">Wave Height Fit
-        Scale</label>
+      <label id="waveHeightFitScaleLabel" for="waveHeightFitScaleSlider" class="ctrl-label">Wave Height Scale
+        (Tune Fitting)</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="waveHeightFitScaleSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease wave height fit scale">−</button>
@@ -116,16 +116,16 @@
       </span>
       <input id="waveHeightFitScaleValue" type="number" min="0.01" max="1.00" step="0.01" value="1.00"
         class="ctrl-value-input" aria-label="Wave height fit scale value" />
-      <label for="analyserSmoothingSlider" class="ctrl-label">Smoothing</label>
+      <label for="analyserSmoothingSlider" class="ctrl-label">Smooth Rendering</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="analyserSmoothingSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease analyser smoothing">−</button>
-        <input id="analyserSmoothingSlider" type="range" min="0" max="1.00" value="0.30" step="0.01" class="ctrl-slider"
+        <input id="analyserSmoothingSlider" type="range" min="0" max="1.00" value="0.80" step="0.01" class="ctrl-slider"
           aria-label="Analyser smoothing time constant" />
         <button class="nudge-btn" data-target="analyserSmoothingSlider" data-dir="1" tabindex="-1"
           aria-label="Increase analyser smoothing">+</button>
       </span>
-      <input id="analyserSmoothingValue" type="number" min="0" max="1.00" step="0.01" value="0.30"
+      <input id="analyserSmoothingValue" type="number" min="0" max="1.00" step="0.01" value="0.80"
         class="ctrl-value-input" aria-label="Analyser smoothing value" />
       <label for="panEdgeFadeSlider" class="ctrl-label">Pan Edge Fade</label>
       <span class="slider-row">

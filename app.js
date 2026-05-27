@@ -235,7 +235,7 @@ function updateWaveHeightAutoFitToggleState() {
   const statusText = isActive
     ? (isAutoFitHeightCalibrating ? 'Fitting...' : 'On')
     : 'Off';
-  waveHeightAutoFitBtn.textContent = `Fit Wave Height: ${statusText}`;
+  waveHeightAutoFitBtn.textContent = `Wave Height Fit: ${statusText}`;
   waveHeightAutoFitBtn.classList.toggle('is-active', isActive);
   waveHeightAutoFitBtn.classList.toggle('is-calibrating', isActive && isAutoFitHeightCalibrating);
   waveHeightAutoFitBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
@@ -276,16 +276,16 @@ function applyAutoFitScale() {
 }
 
 async function analyzeAndAutoFitWaveHeight(file) {
-  if (!file || !isAutoFitHeight) return;
+  if (!file || !isAutoFitHeight) return false;
   ensureAudioGraph();
   const generation = ++analysisGeneration;
   setAutoFitHeightCalibrating(true);
   try {
     const arrayBuffer = await file.arrayBuffer();
-    if (generation !== analysisGeneration || !isAutoFitHeight) return;
+    if (generation !== analysisGeneration || !isAutoFitHeight) return false;
 
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-    if (generation !== analysisGeneration || !isAutoFitHeight) return;
+    if (generation !== analysisGeneration || !isAutoFitHeight) return false;
 
     const { sampleRate, length } = audioBuffer;
     // Always render as 2-channel so the splitter receives a proper stereo signal.
@@ -344,7 +344,7 @@ async function analyzeAndAutoFitWaveHeight(file) {
     offSource.start(0);
     await offlineCtx.startRendering();
 
-    if (generation !== analysisGeneration || !isAutoFitHeight) return;
+    if (generation !== analysisGeneration || !isAutoFitHeight) return false;
 
     // If onaudioprocess never fired (rare in some environments), fall back to worst-case
     // scale: energy=1.0 is the absolute ceiling, so the scale still guarantees no overflow.
@@ -365,9 +365,11 @@ async function analyzeAndAutoFitWaveHeight(file) {
     waveHeightScaleSlider.value = effectiveScale;
     waveHeightScaleValueEl.value = effectiveScale.toFixed(2);
     waveHeightScale = effectiveScale;
+    return true;
   } catch (error) {
     // Keep the app interactive if analysis fails for any reason.
     console.error('Wave height auto-fit analysis failed:', error);
+    return false;
   } finally {
     if (generation === analysisGeneration && isAutoFitHeight) {
       setAutoFitHeightCalibrating(false);
@@ -832,7 +834,7 @@ async function togglePlayPause() {
   }
 }
 
-function toggleAutoFitHeight() {
+async function toggleAutoFitHeight() {
   isAutoFitHeight = !isAutoFitHeight;
 
   if (!isAutoFitHeight) {
@@ -850,7 +852,29 @@ function toggleAutoFitHeight() {
     return;
   }
 
-  analyzeAndAutoFitWaveHeight(currentFile);
+  const shouldResumePlaybackAfterFit = !audio.paused;
+  if (shouldResumePlaybackAfterFit) {
+    audio.pause();
+    playPauseBtn.textContent = 'Play';
+    stopAnimation();
+  }
+
+  const didApplyFit = await analyzeAndAutoFitWaveHeight(currentFile);
+
+  if (shouldResumePlaybackAfterFit && didApplyFit && isAutoFitHeight) {
+    ensureAudioGraph();
+    if (audioContext.state === 'suspended') await audioContext.resume();
+    try {
+      await audio.play();
+      playPauseBtn.textContent = 'Pause';
+      startAnimation();
+    } catch (error) {
+      console.error('Failed to resume playback after wave-height fit:', error);
+      playPauseBtn.textContent = 'Play';
+      stopAnimation();
+    }
+  }
+
   updateWaveHeightAutoFitToggleState();
   drawVisualizer();
 }

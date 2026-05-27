@@ -4,8 +4,8 @@ const playPauseBtn = document.getElementById('playPauseBtn');
 const seekSlider = document.getElementById('seekSlider');
 const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
-const panWidthSlider = document.getElementById('panWidthSlider');
-const panWidthValueEl = document.getElementById('panWidthValue');
+const panFlexSlider = document.getElementById('panFlexSlider');
+const panFlexValueEl = document.getElementById('panFlexValue');
 const panLockSlider = document.getElementById('panLockSlider');
 const panLockValueEl = document.getElementById('panLockValue');
 const lineAlphaSlider = document.getElementById('lineAlphaSlider');
@@ -470,15 +470,20 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
   return count ? Math.sqrt(sumSq / count) : 0;
 }
 
-// Base pan uses absolute L-R level difference scaled by Pan Width.
-// Width = 1.0 is unity (file-referenced), <1 narrows pan, >1 widens pan.
+// Pan Flex is stored as percent delta from unity width: 0% => 1.00, -50% => 0.50, +100% => 2.00.
+function panFlexPercentToWidth(percent) {
+  return Math.max(0.5, Math.min(2.0, 1 + percent / 100));
+}
+
+// Base pan uses absolute L-R level difference scaled by Pan Flex-derived width.
 // For strongly one-sided bands, blend toward relative pan (R-L)/(R+L)
 // so hard-panned content stays visually lateral even at low level.
 function toPanPoint(left, right) {
   const energySum = left + right;
   if (energySum < 0.015) return 0;
   const delta = right - left;
-  const width = Math.max(DIVISION_EPSILON, Number(panWidthSlider.value));
+  const flexPercent = Number(panFlexSlider.value);
+  const width = Math.max(DIVISION_EPSILON, panFlexPercentToWidth(flexPercent));
   const absolutePan = Math.max(-100, Math.min(100, delta * width * 100));
   const relativePan = Math.max(-100, Math.min(100, (delta / Math.max(energySum, DIVISION_EPSILON)) * 100));
   const channelDominance = Math.abs(delta) / Math.max(energySum, DIVISION_EPSILON);
@@ -1128,25 +1133,25 @@ seekSlider.addEventListener('pointerup', async () => {
   }
 });
 
-panWidthSlider.addEventListener('input', () => {
-  panWidthValueEl.value = Number(panWidthSlider.value).toFixed(2);
+panFlexSlider.addEventListener('input', () => {
+  panFlexValueEl.value = Number(panFlexSlider.value).toFixed(0);
 });
 
-panWidthValueEl.addEventListener('focus', () => {
-  panWidthValueEl.select();
+panFlexValueEl.addEventListener('focus', () => {
+  panFlexValueEl.select();
 });
 
-panWidthValueEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') panWidthValueEl.blur();
+panFlexValueEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') panFlexValueEl.blur();
 });
 
-panWidthValueEl.addEventListener('change', () => {
-  const raw = parseFloat(panWidthValueEl.value);
+panFlexValueEl.addEventListener('change', () => {
+  const raw = parseFloat(panFlexValueEl.value);
   const clamped = isNaN(raw)
-    ? Number(panWidthSlider.value)
-    : Math.max(0.50, Math.min(2.00, raw));
-  panWidthValueEl.value = clamped.toFixed(2);
-  panWidthSlider.value = clamped;
+    ? Number(panFlexSlider.value)
+    : Math.max(-50, Math.min(100, raw));
+  panFlexValueEl.value = clamped.toFixed(0);
+  panFlexSlider.value = clamped;
 });
 
 function makeSliderPair(slider, field, min, max, decimals) {

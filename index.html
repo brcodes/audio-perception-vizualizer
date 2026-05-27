@@ -38,17 +38,17 @@
         <button id="bands99Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="99"
           aria-label="Use ninety nine frequency bands" aria-pressed="false">99</button>
       </span>
-      <label for="panWidthSlider" class="ctrl-label">Pan Width</label>
+      <label for="panFlexSlider" class="ctrl-label">Pan Flex</label>
       <span class="slider-row">
-        <button class="nudge-btn" data-target="panWidthSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease pan width">−</button>
-        <input id="panWidthSlider" type="range" min="0.50" max="2.00" value="1.00" step="0.01" class="ctrl-slider"
-          aria-label="Pan width multiplier" />
-        <button class="nudge-btn" data-target="panWidthSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase pan width">+</button>
+        <button class="nudge-btn" data-target="panFlexSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease pan flex">−</button>
+        <input id="panFlexSlider" type="range" min="-50" max="100" value="0" step="1" class="ctrl-slider"
+          aria-label="Pan flex percentage" />
+        <button class="nudge-btn" data-target="panFlexSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase pan flex">+</button>
       </span>
-      <input id="panWidthValue" type="number" min="0.50" max="2.00" step="0.01" value="1.00" class="ctrl-value-input"
-        aria-label="Pan width value" />
+      <input id="panFlexValue" type="number" min="-50" max="100" step="1" value="0" class="ctrl-value-input"
+        aria-label="Pan flex percentage value" />
       <label for="panLockSlider" class="ctrl-label">Pan Lock</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="panLockSlider" data-dir="-1" tabindex="-1"

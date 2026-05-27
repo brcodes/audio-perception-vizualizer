@@ -38,28 +38,17 @@
         <button id="bands99Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="99"
           aria-label="Use ninety nine frequency bands" aria-pressed="false">99</button>
       </span>
-      <label for="panScaleSlider" class="ctrl-label">Pan Scale</label>
+      <label for="panWidthSlider" class="ctrl-label">Pan Width</label>
       <span class="slider-row">
-        <button class="nudge-btn" data-target="panScaleSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease pan scale">−</button>
-        <input id="panScaleSlider" type="range" min="0.10" max="0.80" value="0.14" step="0.01" class="ctrl-slider"
-          aria-label="Pan scale sensitivity" />
-        <button class="nudge-btn" data-target="panScaleSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase pan scale">+</button>
+        <button class="nudge-btn" data-target="panWidthSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease pan width">−</button>
+        <input id="panWidthSlider" type="range" min="0.50" max="2.00" value="1.00" step="0.01" class="ctrl-slider"
+          aria-label="Pan width multiplier" />
+        <button class="nudge-btn" data-target="panWidthSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase pan width">+</button>
       </span>
-      <input id="panScaleValue" type="number" min="0.10" max="0.80" step="0.01" value="0.14" class="ctrl-value-input"
-        aria-label="Pan scale value" />
-      <label for="panDominanceSlider" class="ctrl-label">Pan Dominance (Hard-Pan Hold)</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="panDominanceSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease pan dominance">−</button>
-        <input id="panDominanceSlider" type="range" min="0.00" max="1.00" value="0.60" step="0.01" class="ctrl-slider"
-          aria-label="Pan dominance hard-pan retention" />
-        <button class="nudge-btn" data-target="panDominanceSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase pan dominance">+</button>
-      </span>
-      <input id="panDominanceValue" type="number" min="0.00" max="1.00" step="0.01" value="0.60"
-        class="ctrl-value-input" aria-label="Pan dominance value" />
+      <input id="panWidthValue" type="number" min="0.50" max="2.00" step="0.01" value="1.00" class="ctrl-value-input"
+        aria-label="Pan width value" />
       <label for="panHoldFloorSlider" class="ctrl-label">Pan Hold Floor (Low-Energy)</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="panHoldFloorSlider" data-dir="-1" tabindex="-1"

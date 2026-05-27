@@ -4,10 +4,8 @@ const playPauseBtn = document.getElementById('playPauseBtn');
 const seekSlider = document.getElementById('seekSlider');
 const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
-const panScaleSlider = document.getElementById('panScaleSlider');
-const panScaleValueEl = document.getElementById('panScaleValue');
-const panDominanceSlider = document.getElementById('panDominanceSlider');
-const panDominanceValueEl = document.getElementById('panDominanceValue');
+const panWidthSlider = document.getElementById('panWidthSlider');
+const panWidthValueEl = document.getElementById('panWidthValue');
 const panHoldFloorSlider = document.getElementById('panHoldFloorSlider');
 const panHoldFloorValueEl = document.getElementById('panHoldFloorValue');
 const panMinUpdateSlider = document.getElementById('panMinUpdateSlider');
@@ -79,8 +77,8 @@ let panEdgeFadeIntensity = Number(panEdgeFadeSlider.value);
 const EDGE_FADE_SOLID = 'rgba(22, 29, 37, 1)';
 // Tiny center deadband keeps front-center visually stable against micro L/R noise.
 const PAN_CENTER_DEADBAND_POINTS = DIVISION_EPSILON;
-// Dominance assist raises hard-pan retention when one channel strongly dominates a band.
-const DEFAULT_PAN_DOMINANCE_RATIO = 0.60;
+// Fixed full dominance keeps hard-panned one-sided bands visually lateral.
+const DEFAULT_PAN_DOMINANCE_RATIO = 1.00;
 // Minimum per-band L+R energy for rawPan=0 to be trusted as genuinely centred.
 const DEFAULT_PAN_HOLD_FLOOR = 0.25;
 // Small per-band pan deltas are often FFT noise; this floor suppresses those updates.
@@ -229,12 +227,7 @@ let fitScaleRatio = 1.0;    // fraction of base fit [0.01, 1.0]; persists across
 let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
 let waveWidthScale = DEFAULT_WAVE_WIDTH_SCALE;
 let waveHeightScale = DEFAULT_WAVE_HEIGHT_SCALE;
-let panDominanceRatio = Math.max(
-  0,
-  Math.min(1, Number.isFinite(Number(panDominanceSlider.value))
-    ? Number(panDominanceSlider.value)
-    : DEFAULT_PAN_DOMINANCE_RATIO),
-);
+let panDominanceRatio = DEFAULT_PAN_DOMINANCE_RATIO;
 let panHoldFloor = Math.max(
   0,
   Math.min(1, Number.isFinite(Number(panHoldFloorSlider.value))
@@ -463,15 +456,16 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
   return count ? Math.sqrt(sumSq / count) : 0;
 }
 
-// Base pan uses absolute L-R level difference scaled by Pan Scale.
+// Base pan uses absolute L-R level difference scaled by Pan Width.
+// Width = 1.0 is unity (file-referenced), <1 narrows pan, >1 widens pan.
 // For strongly one-sided bands, blend toward relative pan (R-L)/(R+L)
 // so hard-panned content stays visually lateral even at low level.
 function toPanPoint(left, right) {
   const energySum = left + right;
   if (energySum < 0.015) return 0;
   const delta = right - left;
-  const scale = Math.max(DIVISION_EPSILON, Number(panScaleSlider.value));
-  const absolutePan = Math.max(-100, Math.min(100, (delta / scale) * 100));
+  const width = Math.max(DIVISION_EPSILON, Number(panWidthSlider.value));
+  const absolutePan = Math.max(-100, Math.min(100, delta * width * 100));
   const relativePan = Math.max(-100, Math.min(100, (delta / Math.max(energySum, DIVISION_EPSILON)) * 100));
   const channelDominance = Math.abs(delta) / Math.max(energySum, DIVISION_EPSILON);
   const dominanceWindow = PAN_DOMINANCE_BLEND_END - PAN_DOMINANCE_BLEND_START;
@@ -1110,25 +1104,25 @@ seekSlider.addEventListener('pointerup', async () => {
   }
 });
 
-panScaleSlider.addEventListener('input', () => {
-  panScaleValueEl.value = Number(panScaleSlider.value).toFixed(2);
+panWidthSlider.addEventListener('input', () => {
+  panWidthValueEl.value = Number(panWidthSlider.value).toFixed(2);
 });
 
-panScaleValueEl.addEventListener('focus', () => {
-  panScaleValueEl.select();
+panWidthValueEl.addEventListener('focus', () => {
+  panWidthValueEl.select();
 });
 
-panScaleValueEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') panScaleValueEl.blur();
+panWidthValueEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') panWidthValueEl.blur();
 });
 
-panScaleValueEl.addEventListener('change', () => {
-  const raw = parseFloat(panScaleValueEl.value);
+panWidthValueEl.addEventListener('change', () => {
+  const raw = parseFloat(panWidthValueEl.value);
   const clamped = isNaN(raw)
-    ? Number(panScaleSlider.value)
-    : Math.max(0.10, Math.min(0.80, raw));
-  panScaleValueEl.value = clamped.toFixed(2);
-  panScaleSlider.value = clamped;
+    ? Number(panWidthSlider.value)
+    : Math.max(0.50, Math.min(2.00, raw));
+  panWidthValueEl.value = clamped.toFixed(2);
+  panWidthSlider.value = clamped;
 });
 
 function makeSliderPair(slider, field, min, max, decimals) {
@@ -1145,7 +1139,6 @@ function makeSliderPair(slider, field, min, max, decimals) {
   });
 }
 
-makeSliderPair(panDominanceSlider, panDominanceValueEl, 0, 1, 2);
 makeSliderPair(panHoldFloorSlider, panHoldFloorValueEl, 0, 1, 2);
 makeSliderPair(panMinUpdateSlider, panMinUpdateValueEl, 0, 25, 2);
 makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
@@ -1156,22 +1149,6 @@ makeSliderPair(waveHeightScaleSlider, waveHeightScaleValueEl, 0.25, 10.0, 2);
 makeSliderPair(waveHeightFitScaleSlider, waveHeightFitScaleValueEl, 0.01, 1.0, 2);
 makeSliderPair(analyserSmoothingSlider, analyserSmoothingValueEl, 0, 1.0, 2);
 makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
-
-function setPanDominanceRatio(nextRatio) {
-  const clamped = Math.max(0, Math.min(1, nextRatio));
-  if (Math.abs(panDominanceRatio - clamped) < DIVISION_EPSILON) return;
-  panDominanceRatio = clamped;
-  drawVisualizer();
-}
-
-panDominanceSlider.addEventListener('input', () => {
-  setPanDominanceRatio(Number(panDominanceSlider.value));
-});
-
-panDominanceValueEl.addEventListener('change', () => {
-  // makeSliderPair clamps the value first, so read from slider for canonical state.
-  setPanDominanceRatio(Number(panDominanceSlider.value));
-});
 
 function setPanHoldFloor(nextFloor) {
   const clamped = Math.max(0, Math.min(1, nextFloor));

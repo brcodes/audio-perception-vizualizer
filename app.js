@@ -6,6 +6,12 @@ const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
 const panScaleSlider = document.getElementById('panScaleSlider');
 const panScaleValueEl = document.getElementById('panScaleValue');
+const panDominanceSlider = document.getElementById('panDominanceSlider');
+const panDominanceValueEl = document.getElementById('panDominanceValue');
+const panHoldFloorSlider = document.getElementById('panHoldFloorSlider');
+const panHoldFloorValueEl = document.getElementById('panHoldFloorValue');
+const panMinUpdateSlider = document.getElementById('panMinUpdateSlider');
+const panMinUpdateValueEl = document.getElementById('panMinUpdateValue');
 const lineAlphaSlider = document.getElementById('lineAlphaSlider');
 const lineAlphaValueEl = document.getElementById('lineAlphaValue');
 const lineThicknessSlider = document.getElementById('lineThicknessSlider');
@@ -73,12 +79,15 @@ let panEdgeFadeIntensity = Number(panEdgeFadeSlider.value);
 const EDGE_FADE_SOLID = 'rgba(22, 29, 37, 1)';
 // Tiny center deadband keeps front-center visually stable against micro L/R noise.
 const PAN_CENTER_DEADBAND_POINTS = DIVISION_EPSILON;
+// Dominance assist raises hard-pan retention when one channel strongly dominates a band.
+const DEFAULT_PAN_DOMINANCE_RATIO = 0.60;
 // Minimum per-band L+R energy for rawPan=0 to be trusted as genuinely centred.
-// Below this floor, decaying residual after a transient averages L≈R; the zero
-// reading is noise rather than the mix position — hold the last confident value.
-// Non-zero rawPan values update freely at any energy level.
-
-const PAN_LOCK_FLOOR = 0.25;
+const DEFAULT_PAN_HOLD_FLOOR = 0.25;
+// Small per-band pan deltas are often FFT noise; this floor suppresses those updates.
+const DEFAULT_PAN_MIN_UPDATE_POINTS = 1.0;
+// Blend toward level-invariant pan only for clearly one-sided bands.
+const PAN_DOMINANCE_BLEND_START = 0.70;
+const PAN_DOMINANCE_BLEND_END = 0.98;
 const PAN_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const PAN_DISPLAY_LINE_WIDTH = 1;
 const PAN_DISPLAY_NOTCH_HALF_HEIGHT = 4;
@@ -220,6 +229,24 @@ let fitScaleRatio = 1.0;    // fraction of base fit [0.01, 1.0]; persists across
 let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
 let waveWidthScale = DEFAULT_WAVE_WIDTH_SCALE;
 let waveHeightScale = DEFAULT_WAVE_HEIGHT_SCALE;
+let panDominanceRatio = Math.max(
+  0,
+  Math.min(1, Number.isFinite(Number(panDominanceSlider.value))
+    ? Number(panDominanceSlider.value)
+    : DEFAULT_PAN_DOMINANCE_RATIO),
+);
+let panHoldFloor = Math.max(
+  0,
+  Math.min(1, Number.isFinite(Number(panHoldFloorSlider.value))
+    ? Number(panHoldFloorSlider.value)
+    : DEFAULT_PAN_HOLD_FLOOR),
+);
+let panMinUpdatePoints = Math.max(
+  0,
+  Math.min(25, Number.isFinite(Number(panMinUpdateSlider.value))
+    ? Number(panMinUpdateSlider.value)
+    : DEFAULT_PAN_MIN_UPDATE_POINTS),
+);
 let currentFile;
 let analysisGeneration = 0;
 
@@ -436,15 +463,25 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
   return count ? Math.sqrt(sumSq / count) : 0;
 }
 
-// Use the absolute L–R difference rather than the relative ratio (R-L)/(R+L).
-// Relative normalization causes pan to collapse toward center whenever centered
-// content is added to a band, because it grows the denominator without changing
-// the numerator. Absolute difference is immune: adding equal energy to both
-// channels leaves (R-L) unchanged, so the displayed pan position stays put.
+// Base pan uses absolute L-R level difference scaled by Pan Scale.
+// For strongly one-sided bands, blend toward relative pan (R-L)/(R+L)
+// so hard-panned content stays visually lateral even at low level.
 function toPanPoint(left, right) {
-  if (left + right < 0.015) return 0;
-  const scale = Number(panScaleSlider.value);
-  const panPoint = Math.max(-100, Math.min(100, ((right - left) / scale) * 100));
+  const energySum = left + right;
+  if (energySum < 0.015) return 0;
+  const delta = right - left;
+  const scale = Math.max(DIVISION_EPSILON, Number(panScaleSlider.value));
+  const absolutePan = Math.max(-100, Math.min(100, (delta / scale) * 100));
+  const relativePan = Math.max(-100, Math.min(100, (delta / Math.max(energySum, DIVISION_EPSILON)) * 100));
+  const channelDominance = Math.abs(delta) / Math.max(energySum, DIVISION_EPSILON);
+  const dominanceWindow = PAN_DOMINANCE_BLEND_END - PAN_DOMINANCE_BLEND_START;
+  const dominanceBlend = Math.max(
+    0,
+    Math.min(1, (channelDominance - PAN_DOMINANCE_BLEND_START) / Math.max(dominanceWindow, DIVISION_EPSILON)),
+  );
+  // Keep subtle content readable via absolute pan, while one-sided bands retain hard-pan placement.
+  const blend = panDominanceRatio * dominanceBlend;
+  const panPoint = absolutePan + (relativePan - absolutePan) * blend;
   return Math.abs(panPoint) < PAN_CENTER_DEADBAND_POINTS ? 0 : panPoint;
 }
 
@@ -694,10 +731,10 @@ function drawVisualizer() {
     const displayEnergy = energy;
     const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
-    // Non-zero rawPan means the L-R difference is reliably directional — always update.
-    // rawPan=0 is only trusted as genuinely centred when energy exceeds PAN_LOCK_FLOOR;
-    // below that floor, decaying residual noise averages to centre and we hold instead.
-    if (rawPan !== 0 || l + r > PAN_LOCK_FLOOR) {
+    const panDelta = Math.abs(rawPan - panSmoothed[globalIdx]);
+    // Hold prior pan whenever low-energy centre readings are ambiguous.
+    const centerIsTrusted = rawPan !== 0 || l + r > panHoldFloor;
+    if (centerIsTrusted && panDelta >= panMinUpdatePoints) {
       panSmoothed[globalIdx] = rawPan;
     }
     drawWaveform(
@@ -727,10 +764,10 @@ function drawVisualizer() {
     const energy = (l + r) / 2;
     const displayEnergy = energy;
     const rawPan = toPanPoint(l, r);
-    // Non-zero rawPan means the L-R difference is reliably directional — always update.
-    // rawPan=0 is only trusted as genuinely centred when energy exceeds PAN_LOCK_FLOOR;
-    // below that floor, decaying residual noise averages to centre and we hold instead.
-    if (rawPan !== 0 || l + r > PAN_LOCK_FLOOR) {
+    const panDelta = Math.abs(rawPan - panSmoothed[i]);
+    // Hold prior pan whenever low-energy centre readings are ambiguous.
+    const centerIsTrusted = rawPan !== 0 || l + r > panHoldFloor;
+    if (centerIsTrusted && panDelta >= panMinUpdatePoints) {
       panSmoothed[i] = rawPan;
     }
     drawWaveform(
@@ -1108,6 +1145,9 @@ function makeSliderPair(slider, field, min, max, decimals) {
   });
 }
 
+makeSliderPair(panDominanceSlider, panDominanceValueEl, 0, 1, 2);
+makeSliderPair(panHoldFloorSlider, panHoldFloorValueEl, 0, 1, 2);
+makeSliderPair(panMinUpdateSlider, panMinUpdateValueEl, 0, 25, 2);
 makeSliderPair(lineAlphaSlider, lineAlphaValueEl, 0, 1, 2);
 makeSliderPair(lineThicknessSlider, lineThicknessValueEl, 0.01, 1.0, 2);
 makeSliderPair(widthBoostSlider, widthBoostValueEl, 0, 1.0, 2);
@@ -1116,6 +1156,54 @@ makeSliderPair(waveHeightScaleSlider, waveHeightScaleValueEl, 0.25, 10.0, 2);
 makeSliderPair(waveHeightFitScaleSlider, waveHeightFitScaleValueEl, 0.01, 1.0, 2);
 makeSliderPair(analyserSmoothingSlider, analyserSmoothingValueEl, 0, 1.0, 2);
 makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
+
+function setPanDominanceRatio(nextRatio) {
+  const clamped = Math.max(0, Math.min(1, nextRatio));
+  if (Math.abs(panDominanceRatio - clamped) < DIVISION_EPSILON) return;
+  panDominanceRatio = clamped;
+  drawVisualizer();
+}
+
+panDominanceSlider.addEventListener('input', () => {
+  setPanDominanceRatio(Number(panDominanceSlider.value));
+});
+
+panDominanceValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  setPanDominanceRatio(Number(panDominanceSlider.value));
+});
+
+function setPanHoldFloor(nextFloor) {
+  const clamped = Math.max(0, Math.min(1, nextFloor));
+  if (Math.abs(panHoldFloor - clamped) < DIVISION_EPSILON) return;
+  panHoldFloor = clamped;
+  drawVisualizer();
+}
+
+panHoldFloorSlider.addEventListener('input', () => {
+  setPanHoldFloor(Number(panHoldFloorSlider.value));
+});
+
+panHoldFloorValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  setPanHoldFloor(Number(panHoldFloorSlider.value));
+});
+
+function setPanMinUpdatePoints(nextPoints) {
+  const clamped = Math.max(0, Math.min(25, nextPoints));
+  if (Math.abs(panMinUpdatePoints - clamped) < DIVISION_EPSILON) return;
+  panMinUpdatePoints = clamped;
+  drawVisualizer();
+}
+
+panMinUpdateSlider.addEventListener('input', () => {
+  setPanMinUpdatePoints(Number(panMinUpdateSlider.value));
+});
+
+panMinUpdateValueEl.addEventListener('change', () => {
+  // makeSliderPair clamps the value first, so read from slider for canonical state.
+  setPanMinUpdatePoints(Number(panMinUpdateSlider.value));
+});
 
 function setWidthLevelBoostRatio(nextRatio) {
   const clamped = Math.max(0, Math.min(1, nextRatio));

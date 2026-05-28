@@ -67,17 +67,6 @@
       </span>
       <input id="analyserSmoothingValue" type="number" min="0" max="1.00" step="0.01" value="0.80"
         class="ctrl-value-input" aria-label="Render speed value" />
-      <label for="panEdgeFadeSlider" class="ctrl-label">Line Truncation (Past Pan Edge)</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease line truncation (past pan edge)">−</button>
-        <input id="panEdgeFadeSlider" type="range" min="0" max="1" value="0.61" step="0.01" class="ctrl-slider"
-          aria-label="Line truncation (past pan edge)" />
-        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase line truncation (past pan edge)">+</button>
-      </span>
-      <input id="panEdgeFadeValue" type="number" min="0" max="1" step="0.01" value="0.61" class="ctrl-value-input"
-        aria-label="Line truncation (past pan edge) value" />
       <button id="waveHeightAutoFitBtn" type="button" class="toggle-btn" aria-label="Toggle fit wave height"
         aria-pressed="true">Fit Wave Height: On</button>
       <label id="waveHeightFitScaleLabel" for="waveHeightFitScaleSlider" class="ctrl-label">Wave Height Scale
@@ -152,6 +141,17 @@
         aria-label="Wave width boost when loud value" />
       <button id="binauralPanBtn" type="button" class="toggle-btn" aria-label="Toggle binaural pan display"
         aria-pressed="false">Wave Width Boost (when Panned): None</button>
+      <label for="panEdgeFadeSlider" class="ctrl-label">Line Truncation (Past Pan Edge)</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease line truncation (past pan edge)">−</button>
+        <input id="panEdgeFadeSlider" type="range" min="0" max="1" value="0.61" step="0.01" class="ctrl-slider"
+          aria-label="Line truncation (past pan edge)" />
+        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase line truncation (past pan edge)">+</button>
+      </span>
+      <input id="panEdgeFadeValue" type="number" min="0" max="1" step="0.01" value="0.61" class="ctrl-value-input"
+        aria-label="Line truncation (past pan edge) value" />
     </section>
     <section class="seekbar">
       <span id="currentTime">0:00</span>

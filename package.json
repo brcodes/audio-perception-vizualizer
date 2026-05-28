@@ -1,0 +1,12 @@
+{
+    "name": "music-mix-mapper",
+    "private": true,
+    "version": "1.0.0",
+    "scripts": {
+        "test:smoke": "playwright test --config=playwright.config.js",
+        "test:smoke:headed": "playwright test --config=playwright.config.js --headed"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.55.0"
+    }
+}

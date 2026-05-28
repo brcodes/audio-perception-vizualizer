@@ -327,13 +327,20 @@ body {
   pointer-events: none;
 }
 
-.fo-category-endpoint {
+.fo-category-center-notch,
+.fo-category-right-notch,
+.fo-category-branch-notch {
   position: absolute;
-  left: 8px;
-  width: 11px;
   height: 1px;
   background: #3a4858;
   transform: translateY(-0.5px);
+  pointer-events: none;
+}
+
+.fo-category-split-spine {
+  position: absolute;
+  width: 1px;
+  background: #3a4858;
   pointer-events: none;
 }
 
@@ -423,7 +430,8 @@ body {
 }
 
 .fo-label {
-  flex: 0 0 auto;
+  flex: 0 0 var(--fo-label-column-width, auto);
+  width: var(--fo-label-column-width, auto);
   min-width: 4.8ch;
   white-space: nowrap;
   color: #8a9baa;

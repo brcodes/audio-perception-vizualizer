@@ -127,7 +127,7 @@ const FO_PITCH_CATEGORIES = Object.freeze([
   { minHz: 4000, maxHz: 6000, label: 'Presence (4-6 kHz)' },
   { minHz: 6000, maxHz: 20000, label: 'Brilliance/Treble (6-20 kHz)' },
 ]);
-const FO_PITCH_ENDPOINTS = Object.freeze([20, 60, 250, 500, 2000, 4000, 6000, 20000]);
+const FO_CATEGORY_SPINE_X = 8;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -1093,31 +1093,31 @@ function collectMainOrganizerRowCenters() {
   return centers;
 }
 
-function mapCategoryEndpointY(endpointHz, rowCenters) {
+function mapClosestInCategoryRowY(targetHz, categoryMinHz, categoryMaxHz, rowCenters) {
   if (!rowCenters.length) return 0;
 
-  const topRow = rowCenters[0];
-  const bottomRow = rowCenters[rowCenters.length - 1];
-
-  if (endpointHz >= topRow.hz) return topRow.y;
-  if (endpointHz <= bottomRow.hz) return bottomRow.y;
-
-  for (let i = 0; i < rowCenters.length - 1; i += 1) {
-    const higher = rowCenters[i];
-    const lower = rowCenters[i + 1];
-    if (endpointHz > higher.hz || endpointHz < lower.hz) continue;
-
-    const higherLog = Math.log(higher.hz);
-    const lowerLog = Math.log(lower.hz);
-    const endpointLog = Math.log(endpointHz);
-    const span = lowerLog - higherLog;
-    if (Math.abs(span) <= DIVISION_EPSILON) return (higher.y + lower.y) / 2;
-
-    const t = (endpointLog - higherLog) / span;
-    return higher.y + (lower.y - higher.y) * t;
+  const inCategoryRows = [];
+  for (let i = 0; i < rowCenters.length; i += 1) {
+    const hz = rowCenters[i].hz;
+    if (hz >= categoryMinHz && hz <= categoryMaxHz) {
+      inCategoryRows.push(rowCenters[i]);
+    }
   }
 
-  return bottomRow.y;
+  const candidates = inCategoryRows.length ? inCategoryRows : rowCenters;
+  let best = candidates[0];
+  let bestDelta = Math.abs(Math.log(best.hz) - Math.log(targetHz));
+
+  for (let i = 1; i < candidates.length; i += 1) {
+    const candidate = candidates[i];
+    const delta = Math.abs(Math.log(candidate.hz) - Math.log(targetHz));
+    if (delta < bestDelta) {
+      best = candidate;
+      bestDelta = delta;
+    }
+  }
+
+  return best.y;
 }
 
 function updatePitchCategoryTree() {
@@ -1132,23 +1132,85 @@ function updatePitchCategoryTree() {
   // interpolation lines up in both compact and expanded organizer modes.
   const organizerHeight = Math.max(1, Math.round(foNotches.getBoundingClientRect().height));
   foCategoryTree.style.height = organizerHeight + 'px';
+  const treeRect = foCategoryTree.getBoundingClientRect();
+  const rightEdgeX = Math.max(FO_CATEGORY_SPINE_X + 72, treeRect.width - 6);
 
-  for (let i = 0; i < FO_PITCH_ENDPOINTS.length; i += 1) {
-    const endpointHz = FO_PITCH_ENDPOINTS[i];
-    const endpointEl = document.createElement('div');
-    endpointEl.className = 'fo-category-endpoint';
-    endpointEl.style.top = mapCategoryEndpointY(endpointHz, rowCenters) + 'px';
-    foCategoryTree.appendChild(endpointEl);
+  function appendHorizontal(className, left, right, y) {
+    if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(y)) return;
+    if (right - left <= DIVISION_EPSILON) return;
+    const line = document.createElement('div');
+    line.className = className;
+    line.style.left = left + 'px';
+    line.style.width = right - left + 'px';
+    line.style.top = y + 'px';
+    foCategoryTree.appendChild(line);
+  }
+
+  function appendVertical(className, x, top, bottom) {
+    if (!Number.isFinite(x) || !Number.isFinite(top) || !Number.isFinite(bottom)) return;
+    const yTop = Math.min(top, bottom);
+    const yBottom = Math.max(top, bottom);
+    const line = document.createElement('div');
+    line.className = className;
+    line.style.left = x + 'px';
+    line.style.top = yTop + 'px';
+    line.style.height = Math.max(1, yBottom - yTop) + 'px';
+    foCategoryTree.appendChild(line);
   }
 
   for (let i = 0; i < FO_PITCH_CATEGORIES.length; i += 1) {
     const category = FO_PITCH_CATEGORIES[i];
+    const minY = mapClosestInCategoryRowY(
+      category.minHz,
+      category.minHz,
+      category.maxHz,
+      rowCenters,
+    );
+    const maxY = mapClosestInCategoryRowY(
+      category.maxHz,
+      category.minHz,
+      category.maxHz,
+      rowCenters,
+    );
+    const endpointTopY = Math.min(minY, maxY);
+    const endpointBottomY = Math.max(minY, maxY);
+
     const labelEl = document.createElement('div');
     labelEl.className = 'fo-category-label';
     labelEl.textContent = category.label;
     const midpointHz = Math.sqrt(category.minHz * category.maxHz);
-    labelEl.style.top = mapCategoryEndpointY(midpointHz, rowCenters) + 'px';
+    const midpointY = mapClosestInCategoryRowY(
+      midpointHz,
+      category.minHz,
+      category.maxHz,
+      rowCenters,
+    );
+    labelEl.style.top = midpointY + 'px';
     foCategoryTree.appendChild(labelEl);
+
+    const labelRect = labelEl.getBoundingClientRect();
+    const labelLeftX = labelRect.left - treeRect.left;
+    const labelRightX = labelRect.right - treeRect.left;
+
+    // Left side: a category-level notch from the category spine centered on the label.
+    appendHorizontal(
+      'fo-category-center-notch',
+      FO_CATEGORY_SPINE_X,
+      Math.max(FO_CATEGORY_SPINE_X + 6, labelLeftX - 6),
+      midpointY,
+    );
+
+    // Right side: connector from label to a short split spine, then two endpoint branches.
+    const connectorStartX = Math.min(rightEdgeX - 18, labelRightX + 6);
+    const splitSpineX = Math.max(
+      connectorStartX + 8,
+      Math.min(rightEdgeX - 10, connectorStartX + 16),
+    );
+
+    appendHorizontal('fo-category-right-notch', connectorStartX, splitSpineX, midpointY);
+    appendVertical('fo-category-split-spine', splitSpineX, endpointTopY, endpointBottomY);
+    appendHorizontal('fo-category-branch-notch', splitSpineX, rightEdgeX, endpointTopY);
+    appendHorizontal('fo-category-branch-notch', splitSpineX, rightEdgeX, endpointBottomY);
   }
 }
 
@@ -1207,6 +1269,17 @@ function createDividerRow(band) {
   return row;
 }
 
+function syncFrequencyOrganizerSwatchColumn() {
+  const dividerLabel = foNotches.querySelector('.fo-divider .fo-label');
+  if (!dividerLabel) {
+    foNotches.style.removeProperty('--fo-label-column-width');
+    return;
+  }
+
+  const dividerLabelWidth = Math.ceil(dividerLabel.getBoundingClientRect().width);
+  foNotches.style.setProperty('--fo-label-column-width', dividerLabelWidth + 'px');
+}
+
 // Rebuild the organizer panel to reflect the current activeBandProfile.
 // Called once on init and again whenever the band mode changes.
 function updateFrequencyOrganizer() {
@@ -1242,6 +1315,7 @@ function updateFrequencyOrganizer() {
     foNotches.appendChild(createNotchRow(bottomBands[i]));
   }
 
+  syncFrequencyOrganizerSwatchColumn();
   updatePitchCategoryTree();
 }
 

@@ -1,5 +1,6 @@
 :root {
   color-scheme: dark;
+  --control-font-size: 0.78rem;
 }
 
 * {
@@ -327,8 +328,35 @@ body {
   font-size: 1.3em;
 }
 
+/* Compact organizer for 7/15/25 bands: pack rows like text lines and let
+   the panel height collapse to content instead of stretching to canvas height. */
+.frequency-organizer--compact {
+  align-self: start;
+}
+
+.frequency-organizer--compact .fo-line-container {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.frequency-organizer--compact .fo-notches {
+  justify-content: flex-start;
+  height: auto;
+  gap: 0;
+}
+
+.frequency-organizer--compact .fo-notch-row {
+  flex: 0 0 auto;
+  max-height: none;
+  min-height: 1.05em;
+}
+
+.frequency-organizer--compact .fo-divider .fo-label {
+  font-size: inherit;
+}
+
 .ctrl-label {
-  font-size: 0.78rem;
+  font-size: var(--control-font-size);
   color: #8a9baa;
   white-space: nowrap;
 }
@@ -339,7 +367,7 @@ body {
 }
 
 input.ctrl-value-input {
-  font-size: 0.78rem;
+  font-size: var(--control-font-size);
   font-variant-numeric: tabular-nums;
   color: #8a9baa;
   width: 7ch;
@@ -359,7 +387,7 @@ input.ctrl-value-input {
 }
 
 .ctrl-value-suffix {
-  font-size: 0.78rem;
+  font-size: var(--control-font-size);
   color: #8a9baa;
   font-variant-numeric: tabular-nums;
   user-select: none;

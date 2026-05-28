@@ -31,6 +31,7 @@ const analyserSmoothingSlider = document.getElementById('analyserSmoothingSlider
 const analyserSmoothingValueEl = document.getElementById('analyserSmoothingValue');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
+const frequencyOrganizer = document.getElementById('frequencyOrganizer');
 const foNotches = document.getElementById('foNotches');
 const ctx = canvas.getContext('2d');
 
@@ -101,6 +102,7 @@ const MIN_AUDIBLE_HZ = 20;
 const MAX_AUDIBLE_HZ = 20000;
 const BAND_MODE_KEYS = Object.freeze([7, 15, 25, 49, 77, 99]);
 const DEFAULT_BAND_MODE = 49;
+const COMPACT_ORGANIZER_MAX_BANDS = 25;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -1051,10 +1053,18 @@ function updateFrequencyOrganizer() {
 
   const { topBands, bottomBands } = activeBandProfile;
   const totalBands = topBands.length + bottomBands.length;
+  const useCompactOrganizer = totalBands <= COMPACT_ORGANIZER_MAX_BANDS;
 
-  // Adaptive font size: stays readable from 7 bands down to 99
-  const fontSize = Math.max(7, Math.min(13, Math.floor(600 / totalBands)));
-  foNotches.style.fontSize = fontSize + 'px';
+  frequencyOrganizer.classList.toggle('frequency-organizer--compact', useCompactOrganizer);
+
+  if (useCompactOrganizer) {
+    // Keep organizer labels aligned with the slider label/value text size.
+    foNotches.style.fontSize = 'var(--control-font-size)';
+  } else {
+    // Adaptive font size: stays readable from 49 bands up to 99.
+    const fontSize = Math.max(7, Math.min(13, Math.floor(600 / totalBands)));
+    foNotches.style.fontSize = fontSize + 'px';
+  }
 
   // Top half: highest pitch (back) → second-from-center (near front)
   for (let i = topBands.length - 1; i >= 1; i -= 1) {

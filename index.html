@@ -12,17 +12,13 @@
   <main class="app">
     <section class="controls">
       <h1>Music Mix Mapper</h1>
-      <label for="fileInput">Upload MP3</label>
-      <input id="fileInput" type="file" accept=".mp3,audio/mpeg" />
+      <label for="fileInput">Browse</label>
+      <input id="fileInput" type="file" accept=".mp3,audio/mpeg" aria-label="Browse MP3" />
       <button id="playPauseBtn" type="button" disabled>Play</button>
       <button id="togglePanLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle pan display line">Pan
         Line: On</button>
       <button id="toggleDbLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle dB display line"
-        aria-pressed="true">dB Line: On</button>
-      <button id="waveHeightAutoFitBtn" type="button" class="toggle-btn" aria-label="Toggle fit wave height"
-        aria-pressed="true">Fit Wave Height: On</button>
-      <button id="binauralPanBtn" type="button" class="toggle-btn" aria-label="Toggle binaural pan display"
-        aria-pressed="false">Binaural Pan: Off</button>
+        aria-pressed="true">Db Line: On</button>
       <span class="ctrl-label">Bands</span>
       <span class="bands-row" role="group" aria-label="Visualizer band count">
         <button id="bands7Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="7"
@@ -38,39 +34,6 @@
         <button id="bands99Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="99"
           aria-label="Use ninety nine frequency bands" aria-pressed="false">99</button>
       </span>
-      <label for="panFlexSlider" class="ctrl-label">Pan Flex</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="panFlexSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease pan flex">−</button>
-        <input id="panFlexSlider" type="range" min="-50" max="100" value="0" step="1" class="ctrl-slider"
-          aria-label="Pan flex percentage" />
-        <button class="nudge-btn" data-target="panFlexSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase pan flex">+</button>
-      </span>
-      <input id="panFlexValue" type="number" min="-50" max="100" step="1" value="0" class="ctrl-value-input"
-        aria-label="Pan flex percentage value" />
-      <label for="panLockSlider" class="ctrl-label">Pan Lock</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="panLockSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease pan lock">−</button>
-        <input id="panLockSlider" type="range" min="0.00" max="1.00" value="0.00" step="0.01" class="ctrl-slider"
-          aria-label="Pan lock amount" />
-        <button class="nudge-btn" data-target="panLockSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase pan lock">+</button>
-      </span>
-      <input id="panLockValue" type="number" min="0.00" max="1.00" step="0.01" value="0.00" class="ctrl-value-input"
-        aria-label="Pan lock value" />
-      <label for="lineAlphaSlider" class="ctrl-label">Line Alpha</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease line alpha">−</button>
-        <input id="lineAlphaSlider" type="range" min="0" max="1" value="0.55" step="0.01" class="ctrl-slider"
-          aria-label="Waveform line alpha" />
-        <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase line alpha">+</button>
-      </span>
-      <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="0.55" class="ctrl-value-input"
-        aria-label="Line alpha value" />
       <label for="lineThicknessSlider" class="ctrl-label">Line Thickness</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="-1" tabindex="-1"
@@ -82,17 +45,89 @@
       </span>
       <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.29"
         class="ctrl-value-input" aria-label="Line thickness value" />
-      <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (Height-Based)</label>
+      <label for="lineAlphaSlider" class="ctrl-label">Line Opacity</label>
       <span class="slider-row">
-        <button class="nudge-btn" data-target="widthBoostSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease wave width boost level">−</button>
-        <input id="widthBoostSlider" type="range" min="0.00" max="1.00" value="0.88" step="0.01" class="ctrl-slider"
-          aria-label="Wave width boost by amplitude level" />
-        <button class="nudge-btn" data-target="widthBoostSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase wave width boost level">+</button>
+        <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease line opacity">−</button>
+        <input id="lineAlphaSlider" type="range" min="0" max="1" value="0.55" step="0.01" class="ctrl-slider"
+          aria-label="Waveform line opacity" />
+        <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase line opacity">+</button>
       </span>
-      <input id="widthBoostValue" type="number" min="0.00" max="1.00" step="0.01" value="0.88" class="ctrl-value-input"
-        aria-label="Wave width boost by amplitude level value" />
+      <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="0.55" class="ctrl-value-input"
+        aria-label="Line opacity value" />
+      <label for="analyserSmoothingSlider" class="ctrl-label">Render Speed</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="analyserSmoothingSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease render speed">−</button>
+        <input id="analyserSmoothingSlider" type="range" min="0" max="1.00" value="0.80" step="0.01" class="ctrl-slider"
+          aria-label="Render speed" />
+        <button class="nudge-btn" data-target="analyserSmoothingSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase render speed">+</button>
+      </span>
+      <input id="analyserSmoothingValue" type="number" min="0" max="1.00" step="0.01" value="0.80"
+        class="ctrl-value-input" aria-label="Render speed value" />
+      <label for="panEdgeFadeSlider" class="ctrl-label">Line Truncation (Past Pan Edge)</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease line truncation (past pan edge)">−</button>
+        <input id="panEdgeFadeSlider" type="range" min="0" max="1" value="0.61" step="0.01" class="ctrl-slider"
+          aria-label="Line truncation (past pan edge)" />
+        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase line truncation (past pan edge)">+</button>
+      </span>
+      <input id="panEdgeFadeValue" type="number" min="0" max="1" step="0.01" value="0.61" class="ctrl-value-input"
+        aria-label="Line truncation (past pan edge) value" />
+      <button id="waveHeightAutoFitBtn" type="button" class="toggle-btn" aria-label="Toggle fit wave height"
+        aria-pressed="true">Fit Wave Height: On</button>
+      <label id="waveHeightFitScaleLabel" for="waveHeightFitScaleSlider" class="ctrl-label">Wave Height Scale
+        (Fit)</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="waveHeightFitScaleSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease wave height fit scale">−</button>
+        <input id="waveHeightFitScaleSlider" type="range" min="0.01" max="1.00" value="1.00" step="0.01"
+          class="ctrl-slider" aria-label="Wave height scale (fit)" />
+        <button class="nudge-btn" data-target="waveHeightFitScaleSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase wave height fit scale">+</button>
+      </span>
+      <input id="waveHeightFitScaleValue" type="number" min="0.01" max="1.00" step="0.01" value="1.00"
+        class="ctrl-value-input" aria-label="Wave height scale (fit) value" />
+      <label id="waveHeightScaleLabel" for="waveHeightScaleSlider" class="ctrl-label">Wave Height Scale (No Fit)</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="waveHeightScaleSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease wave height scale">−</button>
+        <input id="waveHeightScaleSlider" type="range" min="0.25" max="10.00" value="1.35" step="0.05"
+          class="ctrl-slider" aria-label="Wave height scale (no fit)" />
+        <button class="nudge-btn" data-target="waveHeightScaleSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase wave height scale">+</button>
+      </span>
+      <input id="waveHeightScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="1.35"
+        class="ctrl-value-input" aria-label="Wave height scale (no fit) value" />
+      <label for="panFlexSlider" class="ctrl-label">Pan Exaggeration</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="panFlexSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease pan exaggeration">−</button>
+        <input id="panFlexSlider" type="range" min="-50" max="100" value="0" step="1" class="ctrl-slider"
+          aria-label="Pan exaggeration percentage" />
+        <button class="nudge-btn" data-target="panFlexSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase pan exaggeration">+</button>
+      </span>
+      <span class="ctrl-value-with-suffix">
+        <input id="panFlexValue" type="number" min="-50" max="100" step="1" value="0" class="ctrl-value-input"
+          aria-label="Pan exaggeration percentage value" />
+        <span class="ctrl-value-suffix" aria-hidden="true">%</span>
+      </span>
+      <label for="panLockSlider" class="ctrl-label">Pan Position Lock</label>
+      <span class="slider-row">
+        <button class="nudge-btn" data-target="panLockSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease pan lock">−</button>
+        <input id="panLockSlider" type="range" min="0.00" max="1.00" value="0.00" step="0.01" class="ctrl-slider"
+          aria-label="Pan lock amount" />
+        <button class="nudge-btn" data-target="panLockSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase pan lock">+</button>
+      </span>
+      <input id="panLockValue" type="number" min="0.00" max="1.00" step="0.01" value="0.00" class="ctrl-value-input"
+        aria-label="Pan lock value" />
       <label for="waveWidthScaleSlider" class="ctrl-label">Wave Width Scale</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="waveWidthScaleSlider" data-dir="-1" tabindex="-1"
@@ -104,51 +139,19 @@
       </span>
       <input id="waveWidthScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="2.50"
         class="ctrl-value-input" aria-label="Wave width scale value" />
-      <label id="waveHeightScaleLabel" for="waveHeightScaleSlider" class="ctrl-label">Wave Height Scale</label>
+      <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (when Loud)</label>
       <span class="slider-row">
-        <button class="nudge-btn" data-target="waveHeightScaleSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease wave height scale">−</button>
-        <input id="waveHeightScaleSlider" type="range" min="0.25" max="10.00" value="1.35" step="0.05"
-          class="ctrl-slider" aria-label="Wave height scale" />
-        <button class="nudge-btn" data-target="waveHeightScaleSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase wave height scale">+</button>
+        <button class="nudge-btn" data-target="widthBoostSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease wave width boost when loud">−</button>
+        <input id="widthBoostSlider" type="range" min="0.00" max="1.00" value="0.88" step="0.01" class="ctrl-slider"
+          aria-label="Wave width boost when loud" />
+        <button class="nudge-btn" data-target="widthBoostSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase wave width boost when loud">+</button>
       </span>
-      <input id="waveHeightScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="1.35"
-        class="ctrl-value-input" aria-label="Wave height scale value" />
-      <label id="waveHeightFitScaleLabel" for="waveHeightFitScaleSlider" class="ctrl-label">Wave Height Scale
-        (Tune Fitting)</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="waveHeightFitScaleSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease wave height fit scale">−</button>
-        <input id="waveHeightFitScaleSlider" type="range" min="0.01" max="1.00" value="1.00" step="0.01"
-          class="ctrl-slider" aria-label="Wave height fit scale" />
-        <button class="nudge-btn" data-target="waveHeightFitScaleSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase wave height fit scale">+</button>
-      </span>
-      <input id="waveHeightFitScaleValue" type="number" min="0.01" max="1.00" step="0.01" value="1.00"
-        class="ctrl-value-input" aria-label="Wave height fit scale value" />
-      <label for="analyserSmoothingSlider" class="ctrl-label">Smooth Rendering</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="analyserSmoothingSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease analyser smoothing">−</button>
-        <input id="analyserSmoothingSlider" type="range" min="0" max="1.00" value="0.80" step="0.01" class="ctrl-slider"
-          aria-label="Analyser smoothing time constant" />
-        <button class="nudge-btn" data-target="analyserSmoothingSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase analyser smoothing">+</button>
-      </span>
-      <input id="analyserSmoothingValue" type="number" min="0" max="1.00" step="0.01" value="0.80"
-        class="ctrl-value-input" aria-label="Analyser smoothing value" />
-      <label for="panEdgeFadeSlider" class="ctrl-label">Pan Edge Fade</label>
-      <span class="slider-row">
-        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="-1" tabindex="-1"
-          aria-label="Decrease pan edge fade intensity">−</button>
-        <input id="panEdgeFadeSlider" type="range" min="0" max="1" value="0.61" step="0.01" class="ctrl-slider"
-          aria-label="Pan edge fade intensity" />
-        <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="1" tabindex="-1"
-          aria-label="Increase pan edge fade intensity">+</button>
-      </span>
-      <input id="panEdgeFadeValue" type="number" min="0" max="1" step="0.01" value="0.61" class="ctrl-value-input"
-        aria-label="Pan edge fade intensity value" />
+      <input id="widthBoostValue" type="number" min="0.00" max="1.00" step="0.01" value="0.88" class="ctrl-value-input"
+        aria-label="Wave width boost when loud value" />
+      <button id="binauralPanBtn" type="button" class="toggle-btn" aria-label="Toggle binaural pan display"
+        aria-pressed="false">Wave Width Boost (when Panned): None</button>
     </section>
     <section class="seekbar">
       <span id="currentTime">0:00</span>

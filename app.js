@@ -64,9 +64,9 @@ const ANALYSER_FIXED_MAX_DB = -30;
 // Shared dB span keeps low-level material visible without crushing loud transients.
 const ANALYSER_DYNAMIC_RANGE_DB = 70;
 // Default IIR smoothing applied on top of the inherent ~186ms FFT window integration.
-// 0 = instantaneous (jittery), 1 = fully frozen; 0.3 (~14ms at 60fps) balances
-// responsiveness against per-frame noise without masking transients.
-const DEFAULT_ANALYSER_SMOOTHING = 0.3;
+// 0 = instantaneous (jittery), 1 = fully frozen; we keep the previous 0.80 smoothing default
+// and expose Render Speed as its inverse (speed = 1 - smoothing).
+const DEFAULT_ANALYSER_SMOOTHING = 0.8;
 // Side bleed lets hard-panned shapes complete without inventing pan points beyond +/-100.
 const PAN_EDGE_BLEED_PX = 200;
 // 0 = no masking (bleed fully visible); 1 = hard cutoff right at the ±100 edge.
@@ -244,6 +244,21 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function renderSpeedToSmoothing(renderSpeed) {
+  const clampedSpeed = Math.max(0, Math.min(1, renderSpeed));
+  return 1 - clampedSpeed;
+}
+
+function getAnalyserSmoothingFromControl() {
+  return renderSpeedToSmoothing(Number(analyserSmoothingSlider.value));
+}
+
+function syncRenderSpeedControlFromSmoothing(smoothing) {
+  const speed = renderSpeedToSmoothing(smoothing);
+  analyserSmoothingSlider.value = speed.toFixed(2);
+  analyserSmoothingValueEl.value = speed.toFixed(2);
+}
+
 function setButtonsLockedWhileFitting(isLocked) {
   const buttons = document.querySelectorAll('button');
   for (let i = 0; i < buttons.length; i += 1) {
@@ -333,7 +348,7 @@ async function analyzeAndAutoFitWaveHeight(file) {
     offAnlLeft.fftSize = 8192;
     offAnlRight.fftSize = 8192;
     // Match live playback smoothing so effectiveMax is on the same temporal scale as the display.
-    const offSmoothing = Number(analyserSmoothingSlider.value);
+    const offSmoothing = getAnalyserSmoothingFromControl();
     offAnlLeft.smoothingTimeConstant = offSmoothing;
     offAnlRight.smoothingTimeConstant = offSmoothing;
     // Match the fixed playback dB range so energy values are on the same scale.
@@ -421,8 +436,9 @@ function ensureAudioGraph() {
   analyserRight = audioContext.createAnalyser();
   analyserLeft.fftSize = 8192;
   analyserRight.fftSize = 8192;
-  analyserLeft.smoothingTimeConstant = Number(analyserSmoothingSlider.value);
-  analyserRight.smoothingTimeConstant = Number(analyserSmoothingSlider.value);
+  const analyserSmoothing = getAnalyserSmoothingFromControl();
+  analyserLeft.smoothingTimeConstant = analyserSmoothing;
+  analyserRight.smoothingTimeConstant = analyserSmoothing;
   const fixedMinDb = ANALYSER_FIXED_MAX_DB - ANALYSER_DYNAMIC_RANGE_DB;
   analyserLeft.minDecibels = fixedMinDb;
   analyserRight.minDecibels = fixedMinDb;
@@ -946,13 +962,15 @@ function updatePanLineToggleState() {
 }
 
 function updateDbLineToggleState() {
-  toggleDbLineBtn.textContent = isDbDisplayLineVisible ? 'dB Line: On' : 'dB Line: Off';
+  toggleDbLineBtn.textContent = isDbDisplayLineVisible ? 'Db Line: On' : 'Db Line: Off';
   toggleDbLineBtn.classList.toggle('is-active', isDbDisplayLineVisible);
   toggleDbLineBtn.setAttribute('aria-pressed', isDbDisplayLineVisible ? 'true' : 'false');
 }
 
 function updateBinauralPanToggleState() {
-  binauralPanBtn.textContent = isBinauralPanDisplayActive ? 'Binaural Pan: On' : 'Binaural Pan: Off';
+  binauralPanBtn.textContent = isBinauralPanDisplayActive
+    ? 'Wave Width Boost (when Panned): Binaural'
+    : 'Wave Width Boost (when Panned): None';
   binauralPanBtn.classList.toggle('is-active', isBinauralPanDisplayActive);
   binauralPanBtn.setAttribute('aria-pressed', isBinauralPanDisplayActive ? 'true' : 'false');
 }
@@ -1178,6 +1196,9 @@ makeSliderPair(waveHeightFitScaleSlider, waveHeightFitScaleValueEl, 0.01, 1.0, 2
 makeSliderPair(analyserSmoothingSlider, analyserSmoothingValueEl, 0, 1.0, 2);
 makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
 
+// Render Speed UI is inverse-mapped from analyser smoothing.
+syncRenderSpeedControlFromSmoothing(DEFAULT_ANALYSER_SMOOTHING);
+
 function setPanLockRatio(nextRatio) {
   const clamped = Math.max(0, Math.min(1, nextRatio));
   if (Math.abs(panLockRatio - clamped) < DIVISION_EPSILON) return;
@@ -1254,14 +1275,14 @@ waveHeightFitScaleValueEl.addEventListener('change', () => {
 });
 
 analyserSmoothingSlider.addEventListener('input', () => {
-  const smoothing = Number(analyserSmoothingSlider.value);
+  const smoothing = getAnalyserSmoothingFromControl();
   if (analyserLeft) analyserLeft.smoothingTimeConstant = smoothing;
   if (analyserRight) analyserRight.smoothingTimeConstant = smoothing;
 });
 
 analyserSmoothingValueEl.addEventListener('change', () => {
   // makeSliderPair clamps the value first, so read from slider for canonical state.
-  const smoothing = Number(analyserSmoothingSlider.value);
+  const smoothing = getAnalyserSmoothingFromControl();
   if (analyserLeft) analyserLeft.smoothingTimeConstant = smoothing;
   if (analyserRight) analyserRight.smoothingTimeConstant = smoothing;
 });

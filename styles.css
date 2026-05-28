@@ -342,14 +342,30 @@ input.ctrl-value-input {
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   color: #8a9baa;
-  width: 3rem;
+  width: 7ch;
   background: transparent;
   border: none;
   border-bottom: 1px solid transparent;
-  padding: 0;
+  padding: 0 2ch 0 0;
   outline: none;
   cursor: text;
   text-align: left;
+}
+
+.ctrl-value-with-suffix {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+}
+
+.ctrl-value-suffix {
+  font-size: 0.78rem;
+  color: #8a9baa;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  margin-left: -4ch;
+  margin-right: 3ch;
+  pointer-events: none;
 }
 
 input.ctrl-value-input:focus {
@@ -364,6 +380,7 @@ input.ctrl-value-input::-webkit-inner-spin-button {
 }
 
 input.ctrl-value-input[type=number] {
+  appearance: textfield;
   -moz-appearance: textfield;
 }
 

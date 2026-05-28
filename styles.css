@@ -284,9 +284,9 @@ body {
   flex-direction: column;
   background: #1a2129;
   border-left: 1px solid #2f3944;
-  padding: 0.5rem 0.5rem 0.5rem 0;
-  min-width: 148px;
-  max-width: 188px;
+  padding: 0.5rem;
+  min-width: 360px;
+  max-width: 520px;
   overflow: hidden;
 }
 
@@ -294,7 +294,7 @@ body {
   font-size: var(--control-font-size);
   color: #e8edf2;
   letter-spacing: 0.04em;
-  padding: 0 0 0.35rem 0.75rem;
+  padding: 0 0 0.35rem 0.25rem;
   border-bottom: 1px solid #2f3944;
   margin-bottom: 0.3rem;
   flex-shrink: 0;
@@ -302,14 +302,60 @@ body {
 
 .fo-line-container {
   flex: 1;
-  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0.8rem;
   min-height: 0;
   overflow: hidden;
   padding-bottom: 6px;
 }
 
-/* the vertical spine line */
-.fo-line-container::before {
+.fo-category-tree {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+.fo-category-tree::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #3a4858;
+  pointer-events: none;
+}
+
+.fo-category-endpoint {
+  position: absolute;
+  left: 8px;
+  width: 11px;
+  height: 1px;
+  background: #3a4858;
+  transform: translateY(-0.5px);
+  pointer-events: none;
+}
+
+.fo-category-label {
+  position: absolute;
+  left: 23px;
+  transform: translateY(-50%);
+  font-size: var(--control-font-size);
+  color: #8a9baa;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-main-tree {
+  position: relative;
+  flex: 0 0 124px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* the main frequency-tree vertical spine */
+.fo-main-tree::before {
   content: '';
   position: absolute;
   left: 11px;
@@ -320,8 +366,8 @@ body {
   pointer-events: none;
 }
 
-/* terminal notch for the frequency tree (all modes) */
-.fo-line-container::after {
+/* terminal notch for the main frequency tree */
+.fo-main-tree::after {
   content: '';
   position: absolute;
   left: 11px;
@@ -377,10 +423,9 @@ body {
 }
 
 .fo-label {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 4.8ch;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: #8a9baa;
   font-size: inherit;
   font-variant-numeric: tabular-nums;
@@ -412,7 +457,15 @@ body {
 
 .frequency-organizer--compact .fo-line-container {
   flex: 0 0 auto;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.frequency-organizer--compact .fo-category-tree {
+  min-width: 200px;
+}
+
+.frequency-organizer--compact .fo-main-tree {
+  flex: 0 0 124px;
 }
 
 .frequency-organizer--compact .fo-notches {

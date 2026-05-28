@@ -33,6 +33,7 @@ const binauralPanBtn = document.getElementById('binauralPanBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const frequencyOrganizer = document.getElementById('frequencyOrganizer');
 const foNotches = document.getElementById('foNotches');
+const foCategoryTree = document.getElementById('foCategoryTree');
 const ctx = canvas.getContext('2d');
 const foTooltipEl = document.createElement('div');
 foTooltipEl.className = 'fo-tooltip';
@@ -117,6 +118,16 @@ const DEFAULT_BAND_MODE = 49;
 const COMPACT_ORGANIZER_MAX_BANDS = 25;
 const FO_TOOLTIP_OFFSET_X = 14;
 const FO_TOOLTIP_OFFSET_Y = 18;
+const FO_PITCH_CATEGORIES = Object.freeze([
+  { minHz: 20, maxHz: 60, label: 'Sub-bass (20-60 Hz)' },
+  { minHz: 60, maxHz: 250, label: 'Bass (60-250 Hz)' },
+  { minHz: 250, maxHz: 500, label: 'Low midrange (250-500 Hz)' },
+  { minHz: 500, maxHz: 2000, label: 'Midrange (500 Hz-2 kHz)' },
+  { minHz: 2000, maxHz: 4000, label: 'Upper midrange (2-4 kHz)' },
+  { minHz: 4000, maxHz: 6000, label: 'Presence (4-6 kHz)' },
+  { minHz: 6000, maxHz: 20000, label: 'Brilliance/Treble (6-20 kHz)' },
+]);
+const FO_PITCH_ENDPOINTS = Object.freeze([20, 60, 250, 500, 2000, 4000, 6000, 20000]);
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -1064,6 +1075,83 @@ function bindFrequencyTooltip(row, text, swatchColor) {
   });
 }
 
+function collectMainOrganizerRowCenters() {
+  const rows = foNotches.querySelectorAll('.fo-notch-row');
+  if (!rows.length) return [];
+
+  const baseRect = foNotches.getBoundingClientRect();
+  const centers = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const hz = Number(rows[i].dataset.hz);
+    if (!Number.isFinite(hz)) continue;
+    const rect = rows[i].getBoundingClientRect();
+    centers.push({
+      hz,
+      y: rect.top - baseRect.top + rect.height / 2,
+    });
+  }
+  return centers;
+}
+
+function mapCategoryEndpointY(endpointHz, rowCenters) {
+  if (!rowCenters.length) return 0;
+
+  const topRow = rowCenters[0];
+  const bottomRow = rowCenters[rowCenters.length - 1];
+
+  if (endpointHz >= topRow.hz) return topRow.y;
+  if (endpointHz <= bottomRow.hz) return bottomRow.y;
+
+  for (let i = 0; i < rowCenters.length - 1; i += 1) {
+    const higher = rowCenters[i];
+    const lower = rowCenters[i + 1];
+    if (endpointHz > higher.hz || endpointHz < lower.hz) continue;
+
+    const higherLog = Math.log(higher.hz);
+    const lowerLog = Math.log(lower.hz);
+    const endpointLog = Math.log(endpointHz);
+    const span = lowerLog - higherLog;
+    if (Math.abs(span) <= DIVISION_EPSILON) return (higher.y + lower.y) / 2;
+
+    const t = (endpointLog - higherLog) / span;
+    return higher.y + (lower.y - higher.y) * t;
+  }
+
+  return bottomRow.y;
+}
+
+function updatePitchCategoryTree() {
+  if (!foCategoryTree) return;
+
+  while (foCategoryTree.firstChild) foCategoryTree.removeChild(foCategoryTree.firstChild);
+
+  const rowCenters = collectMainOrganizerRowCenters();
+  if (!rowCenters.length) return;
+
+  // Match the category tree height to the rendered frequency tree so endpoint
+  // interpolation lines up in both compact and expanded organizer modes.
+  const organizerHeight = Math.max(1, Math.round(foNotches.getBoundingClientRect().height));
+  foCategoryTree.style.height = organizerHeight + 'px';
+
+  for (let i = 0; i < FO_PITCH_ENDPOINTS.length; i += 1) {
+    const endpointHz = FO_PITCH_ENDPOINTS[i];
+    const endpointEl = document.createElement('div');
+    endpointEl.className = 'fo-category-endpoint';
+    endpointEl.style.top = mapCategoryEndpointY(endpointHz, rowCenters) + 'px';
+    foCategoryTree.appendChild(endpointEl);
+  }
+
+  for (let i = 0; i < FO_PITCH_CATEGORIES.length; i += 1) {
+    const category = FO_PITCH_CATEGORIES[i];
+    const labelEl = document.createElement('div');
+    labelEl.className = 'fo-category-label';
+    labelEl.textContent = category.label;
+    const midpointHz = Math.sqrt(category.minHz * category.maxHz);
+    labelEl.style.top = mapCategoryEndpointY(midpointHz, rowCenters) + 'px';
+    foCategoryTree.appendChild(labelEl);
+  }
+}
+
 // Build one color-notch row for a regular band.
 function createNotchRow(band) {
   const tooltip = formatBandHz(band.hz) +
@@ -1072,6 +1160,7 @@ function createNotchRow(band) {
     'rgb(' + band.rgb.r + ',' + band.rgb.g + ',' + band.rgb.b + ')';
   const row = document.createElement('div');
   row.className = 'fo-notch-row';
+  row.dataset.hz = band.hz.toString();
   bindFrequencyTooltip(row, tooltip, swatchColor);
 
   const tick = document.createElement('div');
@@ -1095,6 +1184,7 @@ function createNotchRow(band) {
 function createDividerRow(band) {
   const row = document.createElement('div');
   row.className = 'fo-notch-row fo-divider';
+  row.dataset.hz = band.hz.toString();
   const tooltip = 'Dividing pitch: ' + formatBandHz(band.hz);
   const swatchColor =
     'rgb(' + band.rgb.r + ',' + band.rgb.g + ',' + band.rgb.b + ')';
@@ -1151,6 +1241,8 @@ function updateFrequencyOrganizer() {
   for (let i = bottomBands.length - 1; i >= 0; i -= 1) {
     foNotches.appendChild(createNotchRow(bottomBands[i]));
   }
+
+  updatePitchCategoryTree();
 }
 
 function setBandMode(nextMode) {
@@ -1419,6 +1511,7 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('resize', () => {
   resizeCanvas();
+  updatePitchCategoryTree();
   drawVisualizer();
 });
 

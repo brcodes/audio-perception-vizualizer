@@ -163,11 +163,14 @@
       </span>
       <span id="totalTime">0:00</span>
     </section>
-    <canvas id="vizCanvas" role="img" aria-label="Music Mix Mapper Visualizer">
-      Square visualization of MP3 frequency and stereo pan content.
-    </canvas>
+    <div class="viz-stage" id="vizStage">
+      <canvas id="vizCanvas" role="img" aria-label="Music Mix Mapper Visualizer">
+        Square visualization of MP3 frequency and stereo pan content.
+      </canvas>
+    </div>
     <aside class="frequency-organizer" id="frequencyOrganizer" aria-label="Frequency Organizer">
-      <header class="fo-header">Frequency Organizer</header>
+      <button id="toggleFoOrganizerBtn" type="button" class="toggle-btn fo-header-toggle"
+        aria-label="Toggle Frequency Organizer" aria-pressed="true">Frequency Organizer</button>
       <div class="fo-line-container">
         <div class="fo-category-tree" id="foCategoryTree" aria-hidden="true"></div>
         <div class="fo-main-tree" id="foMainTree">

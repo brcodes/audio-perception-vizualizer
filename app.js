@@ -1,4 +1,5 @@
 const canvas = document.getElementById('vizCanvas');
+const vizStage = document.getElementById('vizStage');
 const fileInput = document.getElementById('fileInput');
 const playPauseBtn = document.getElementById('playPauseBtn');
 const seekSlider = document.getElementById('seekSlider');
@@ -32,8 +33,11 @@ const analyserSmoothingValueEl = document.getElementById('analyserSmoothingValue
 const binauralPanBtn = document.getElementById('binauralPanBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const frequencyOrganizer = document.getElementById('frequencyOrganizer');
+const toggleFoOrganizerBtn = document.getElementById('toggleFoOrganizerBtn');
 const foNotches = document.getElementById('foNotches');
 const foCategoryTree = document.getElementById('foCategoryTree');
+const foMainTree = document.getElementById('foMainTree');
+const foLineContainer = document.querySelector('.fo-line-container');
 const ctx = canvas.getContext('2d');
 const foTooltipEl = document.createElement('div');
 foTooltipEl.className = 'fo-tooltip';
@@ -129,6 +133,7 @@ const FO_PITCH_CATEGORIES = Object.freeze([
   { minHz: 6000, maxHz: 20000, label: 'Brilliance/Treble (6-20kHz)' },
 ]);
 const FO_CATEGORY_SPINE_X = 8;
+const FO_MAIN_SPINE_X = 4;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -247,6 +252,7 @@ let wasPlaying = false;
 let isPanDisplayLineVisible = true;
 let isDbDisplayLineVisible = true;
 let isBinauralPanDisplayActive = false;
+let isFrequencyOrganizerVisible = true;
 let isAutoFitHeight = true;
 let isAutoFitHeightCalibrating = false;
 let autoFitBaseScale = 0;   // fittedScale from analysis; 0 until first run
@@ -485,10 +491,13 @@ function ensureAudioGraph() {
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  canvas.width = Math.max(1, Math.floor(width * dpr));
-  canvas.height = Math.max(1, Math.floor(height * dpr));
+  const stageWidth = vizStage.clientWidth;
+  const stageHeight = vizStage.clientHeight;
+  const side = Math.max(1, Math.floor(Math.min(stageWidth, stageHeight)));
+  canvas.style.width = side + 'px';
+  canvas.style.height = side + 'px';
+  canvas.width = Math.max(1, Math.floor(side * dpr));
+  canvas.height = Math.max(1, Math.floor(side * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -1005,6 +1014,13 @@ function updateBinauralPanToggleState() {
   binauralPanBtn.setAttribute('aria-pressed', isBinauralPanDisplayActive ? 'true' : 'false');
 }
 
+function updateFrequencyOrganizerToggleState() {
+  toggleFoOrganizerBtn.textContent = 'Frequency Organizer';
+  toggleFoOrganizerBtn.classList.remove('is-active');
+  toggleFoOrganizerBtn.setAttribute('aria-pressed', isFrequencyOrganizerVisible ? 'true' : 'false');
+  frequencyOrganizer.classList.toggle('frequency-organizer--hidden', !isFrequencyOrganizerVisible);
+}
+
 function updateBandModeButtons() {
   for (let i = 0; i < bandModeButtons.length; i += 1) {
     const button = bandModeButtons[i];
@@ -1136,7 +1152,7 @@ function showCategoryTooltip(category, clientX, clientY) {
 
   setTooltipContent(
     category.label,
-    'Actual range: ' + formatBandHz(actualMinHz) + '-' + formatBandHz(actualMaxHz),
+    'Actual: ' + formatBandHz(actualMinHz) + '-' + formatBandHz(actualMaxHz),
     swatches,
     true,
   );
@@ -1248,7 +1264,7 @@ function mapClosestInCategoryRowY(targetHz, categoryMinHz, categoryMaxHz, rowCen
 }
 
 function updatePitchCategoryTree() {
-  if (!foCategoryTree) return;
+  if (!foCategoryTree || !isFrequencyOrganizerVisible) return;
 
   while (foCategoryTree.firstChild) foCategoryTree.removeChild(foCategoryTree.firstChild);
 
@@ -1261,6 +1277,16 @@ function updatePitchCategoryTree() {
   foCategoryTree.style.height = organizerHeight + 'px';
   const treeRect = foCategoryTree.getBoundingClientRect();
   const rightEdgeX = Math.max(FO_CATEGORY_SPINE_X + 72, treeRect.width - 6);
+
+  if (foLineContainer && foMainTree) {
+    const containerRect = foLineContainer.getBoundingClientRect();
+    const mainTreeRect = foMainTree.getBoundingClientRect();
+    const dividerStart = FO_CATEGORY_SPINE_X;
+    const dividerEnd = mainTreeRect.left - containerRect.left + FO_MAIN_SPINE_X;
+    const dividerWidth = Math.max(0, dividerEnd - dividerStart);
+    foLineContainer.style.setProperty('--fo-divider-start', dividerStart + 'px');
+    foLineContainer.style.setProperty('--fo-divider-width', dividerWidth + 'px');
+  }
 
   function appendHorizontal(className, left, right, y) {
     if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(y)) return;
@@ -1420,6 +1446,7 @@ function syncFrequencyOrganizerSwatchColumn() {
 // Called once on init and again whenever the band mode changes.
 function updateFrequencyOrganizer() {
   hideFrequencyTooltip();
+  if (!isFrequencyOrganizerVisible) return;
   // Clear existing notches without innerHTML
   while (foNotches.firstChild) foNotches.removeChild(foNotches.firstChild);
 
@@ -1479,6 +1506,15 @@ binauralPanBtn.addEventListener('click', () => {
   isBinauralPanDisplayActive = !isBinauralPanDisplayActive;
   updateBinauralPanToggleState();
   drawVisualizer();
+});
+toggleFoOrganizerBtn.addEventListener('click', () => {
+  isFrequencyOrganizerVisible = !isFrequencyOrganizerVisible;
+  updateFrequencyOrganizerToggleState();
+  if (isFrequencyOrganizerVisible) {
+    updateFrequencyOrganizer();
+  } else {
+    hideFrequencyTooltip();
+  }
 });
 waveHeightAutoFitBtn.addEventListener('click', () => {
   toggleAutoFitHeight();
@@ -1721,12 +1757,13 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('resize', () => {
   resizeCanvas();
-  updatePitchCategoryTree();
+  if (isFrequencyOrganizerVisible) updatePitchCategoryTree();
   drawVisualizer();
 });
 
 updatePanLineToggleState();
 updateDbLineToggleState();
+updateFrequencyOrganizerToggleState();
 updateWaveHeightAutoFitToggleState();
 updateBandModeButtons();
 updateFrequencyOrganizer();

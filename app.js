@@ -38,6 +38,9 @@ const foNotches = document.getElementById('foNotches');
 const foCategoryTree = document.getElementById('foCategoryTree');
 const foMainTree = document.getElementById('foMainTree');
 const foLineContainer = document.querySelector('.fo-line-container');
+const allButtons = Array.from(document.querySelectorAll('button'));
+const waveHeightScaleNudgeButtons = Array.from(document.querySelectorAll('.nudge-btn[data-target="waveHeightScaleSlider"]'));
+const waveHeightFitScaleNudgeButtons = Array.from(document.querySelectorAll('.nudge-btn[data-target="waveHeightFitScaleSlider"]'));
 const ctx = canvas.getContext('2d');
 const foTooltipEl = document.createElement('div');
 foTooltipEl.className = 'fo-tooltip';
@@ -203,11 +206,18 @@ function createLogBands(count) {
 }
 
 function createBandProfile(bands) {
+  for (let i = 0; i < bands.length; i += 1) {
+    const { r, g, b } = bands[i].rgb;
+    bands[i].strokeColor = `rgb(${r}, ${g}, ${b})`;
+  }
   const splitIndex = Math.floor(bands.length / 2);
+  const topBands = bands.slice(splitIndex);
+  const bottomBands = bands.slice(0, splitIndex);
   return {
     splitIndex,
-    bottomBands: bands.slice(0, splitIndex),
-    topBands: bands.slice(splitIndex),
+    bottomBands,
+    topBands,
+    allBands: topBands.concat(bottomBands),
     // Per-band smoothed pan state persists across frames for temporal stability.
     panSmoothed: new Float32Array(bands.length),
   };
@@ -258,6 +268,8 @@ let fitScaleRatio = 1.0;    // fraction of base fit [0.01, 1.0]; persists across
 let widthLevelBoostRatio = DEFAULT_WIDTH_LEVEL_BOOST_RATIO;
 let waveWidthScale = DEFAULT_WAVE_WIDTH_SCALE;
 let waveHeightScale = DEFAULT_WAVE_HEIGHT_SCALE;
+let lineAlpha = Number(lineAlphaSlider.value);
+let lineThicknessControl = Math.max(0.01, Number(lineThicknessSlider.value));
 let panDominanceRatio = DEFAULT_PAN_DOMINANCE_RATIO;
 const panHoldFloor = DEFAULT_PAN_HOLD_FLOOR;
 let panLockRatio = Math.max(
@@ -270,6 +282,36 @@ let currentFile;
 let activeFrequencyTooltipRow = null;
 let activeCategoryTooltipLabel = null;
 let analysisGeneration = 0;
+let panFlexWidth = 1;
+
+const activeBandRangeCache = {
+  mode: -1,
+  sampleRate: 0,
+  binCount: 0,
+  topStarts: new Uint16Array(0),
+  topEnds: new Uint16Array(0),
+  bottomStarts: new Uint16Array(0),
+  bottomEnds: new Uint16Array(0),
+};
+
+const panEdgeFadeCache = {
+  canvasWidth: 0,
+  leftCoreX: 0,
+  rightCoreX: 0,
+  intensity: -1,
+  leftGradient: null,
+  rightGradient: null,
+};
+
+function invalidateBandRangeCache() {
+  activeBandRangeCache.mode = -1;
+}
+
+function revokeObjectUrlIfNeeded() {
+  if (!objectUrl) return;
+  URL.revokeObjectURL(objectUrl);
+  objectUrl = undefined;
+}
 
 function formatTime(seconds) {
   if (!isFinite(seconds) || seconds < 0) return '0:00';
@@ -294,9 +336,8 @@ function syncRenderSpeedControlFromSmoothing(smoothing) {
 }
 
 function setButtonsLockedWhileFitting(isLocked) {
-  const buttons = document.querySelectorAll('button');
-  for (let i = 0; i < buttons.length; i += 1) {
-    const button = buttons[i];
+  for (let i = 0; i < allButtons.length; i += 1) {
+    const button = allButtons[i];
     if (button === waveHeightAutoFitBtn) continue;
     if (isLocked) {
       if (!button.hasAttribute('data-fit-lock-prev-disabled')) {
@@ -327,16 +368,14 @@ function updateWaveHeightAutoFitToggleState() {
   waveHeightScaleLabel.classList.toggle('ctrl-label--locked', isActive);
   waveHeightScaleSlider.disabled = isActive;
   waveHeightScaleValueEl.disabled = isActive;
-  const scaleNudgeBtns = document.querySelectorAll('.nudge-btn[data-target="waveHeightScaleSlider"]');
-  for (let i = 0; i < scaleNudgeBtns.length; i += 1) {
-    scaleNudgeBtns[i].disabled = isActive;
+  for (let i = 0; i < waveHeightScaleNudgeButtons.length; i += 1) {
+    waveHeightScaleNudgeButtons[i].disabled = isActive;
   }
   waveHeightFitScaleLabel.classList.toggle('ctrl-label--locked', !isActive);
   waveHeightFitScaleSlider.disabled = !isActive;
   waveHeightFitScaleValueEl.disabled = !isActive;
-  const fitNudgeBtns = document.querySelectorAll('.nudge-btn[data-target="waveHeightFitScaleSlider"]');
-  for (let i = 0; i < fitNudgeBtns.length; i += 1) {
-    fitNudgeBtns[i].disabled = !isActive;
+  for (let i = 0; i < waveHeightFitScaleNudgeButtons.length; i += 1) {
+    waveHeightFitScaleNudgeButtons[i].disabled = !isActive;
   }
 }
 
@@ -401,16 +440,20 @@ async function analyzeAndAutoFitWaveHeight(file) {
     const rBuf = new Uint8Array(offAnlRight.frequencyBinCount);
     let maxEnergy = 0;
     // Evaluate every band in the active profile so the fit covers the actual draw pass.
-    const { topBands, bottomBands } = BAND_PROFILES[activeBandMode];
-    const allBands = topBands.concat(bottomBands);
+    const allBands = BAND_PROFILES[activeBandMode].allBands;
+    const offBandStarts = new Uint16Array(allBands.length);
+    const offBandEnds = new Uint16Array(allBands.length);
+    for (let i = 0; i < allBands.length; i += 1) {
+      offBandStarts[i] = hzToIndex(allBands[i].minHz, sampleRate, lBuf.length - 1);
+      offBandEnds[i] = hzToIndex(allBands[i].maxHz, sampleRate, lBuf.length - 1);
+    }
 
     offProcessor.onaudioprocess = () => {
       offAnlLeft.getByteFrequencyData(lBuf);
       offAnlRight.getByteFrequencyData(rBuf);
       for (let i = 0; i < allBands.length; i += 1) {
-        const band = allBands[i];
-        const l = getBandEnergy(lBuf, band.minHz, band.maxHz, sampleRate);
-        const r = getBandEnergy(rBuf, band.minHz, band.maxHz, sampleRate);
+        const l = getBandEnergyFromIndices(lBuf, offBandStarts[i], offBandEnds[i]);
+        const r = getBandEnergyFromIndices(rBuf, offBandStarts[i], offBandEnds[i]);
         const energy = (l + r) / 2;
         if (energy > maxEnergy) maxEnergy = energy;
       }
@@ -480,6 +523,7 @@ function ensureAudioGraph() {
   analyserRight.maxDecibels = ANALYSER_FIXED_MAX_DB;
   leftData = new Uint8Array(analyserLeft.frequencyBinCount);
   rightData = new Uint8Array(analyserRight.frequencyBinCount);
+  invalidateBandRangeCache();
 
   sourceNode.connect(splitter);
   splitter.connect(analyserLeft, 0);
@@ -511,6 +555,10 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
   const maxIndex = data.length - 1;
   const start = hzToIndex(minHz, sampleRate, maxIndex);
   const end = hzToIndex(maxHz, sampleRate, maxIndex);
+  return getBandEnergyFromIndices(data, start, end);
+}
+
+function getBandEnergyFromIndices(data, start, end) {
   // Changed from <= to < so that single-bin bands (common at low frequencies) still return a value
   if (end < start) return 0;
 
@@ -522,6 +570,42 @@ function getBandEnergy(data, minHz, maxHz, sampleRate) {
     count += 1;
   }
   return count ? Math.sqrt(sumSq / count) : 0;
+}
+
+function getActiveBandRanges(sampleRate, binCount) {
+  if (
+    activeBandRangeCache.mode === activeBandMode &&
+    activeBandRangeCache.sampleRate === sampleRate &&
+    activeBandRangeCache.binCount === binCount
+  ) {
+    return activeBandRangeCache;
+  }
+
+  const maxIndex = Math.max(0, binCount - 1);
+  const { topBands, bottomBands } = activeBandProfile;
+  const topStarts = new Uint16Array(topBands.length);
+  const topEnds = new Uint16Array(topBands.length);
+  const bottomStarts = new Uint16Array(bottomBands.length);
+  const bottomEnds = new Uint16Array(bottomBands.length);
+
+  for (let i = 0; i < topBands.length; i += 1) {
+    topStarts[i] = hzToIndex(topBands[i].minHz, sampleRate, maxIndex);
+    topEnds[i] = hzToIndex(topBands[i].maxHz, sampleRate, maxIndex);
+  }
+
+  for (let i = 0; i < bottomBands.length; i += 1) {
+    bottomStarts[i] = hzToIndex(bottomBands[i].minHz, sampleRate, maxIndex);
+    bottomEnds[i] = hzToIndex(bottomBands[i].maxHz, sampleRate, maxIndex);
+  }
+
+  activeBandRangeCache.mode = activeBandMode;
+  activeBandRangeCache.sampleRate = sampleRate;
+  activeBandRangeCache.binCount = binCount;
+  activeBandRangeCache.topStarts = topStarts;
+  activeBandRangeCache.topEnds = topEnds;
+  activeBandRangeCache.bottomStarts = bottomStarts;
+  activeBandRangeCache.bottomEnds = bottomEnds;
+  return activeBandRangeCache;
 }
 
 // Pan Flex is stored as percent delta from unity width: 0% => 1.00, -50% => 0.50, +100% => 2.00.
@@ -536,8 +620,7 @@ function toPanPoint(left, right) {
   const energySum = left + right;
   if (energySum < 0.015) return 0;
   const delta = right - left;
-  const flexPercent = Number(panFlexSlider.value);
-  const width = Math.max(DIVISION_EPSILON, panFlexPercentToWidth(flexPercent));
+  const width = Math.max(DIVISION_EPSILON, panFlexWidth);
   const absolutePan = Math.max(-100, Math.min(100, delta * width * 100));
   const relativePan = Math.max(-100, Math.min(100, (delta / Math.max(energySum, DIVISION_EPSILON)) * 100));
   const channelDominance = Math.abs(delta) / Math.max(energySum, DIVISION_EPSILON);
@@ -575,7 +658,7 @@ function frequencyToWidthFactor(logT) {
   return WIDTH_W0 * Math.pow(1000, -WIDTH_COMPRESSION * logT);
 }
 
-function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint, leftLimit, rightLimit) {
+function drawWaveform(centerX, centerY, radius, dir, strokeColor, lineWidth, energy, logT, panPoint, leftLimit, rightLimit) {
   const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
   const height = radius * heightFactor * waveHeightScale;
 
@@ -598,7 +681,7 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
   if (width <= DIVISION_EPSILON) return;
   const peakX = minX + width * 0.5;
 
-  ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineAlpha})`;
+  ctx.strokeStyle = strokeColor;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
   ctx.moveTo(minX, centerY);
@@ -616,23 +699,45 @@ function drawPanEdgeFade(centerX, centerY, radius, canvasWidth) {
   const leftBleedWidth = Math.max(0, leftCoreX);
   const rightBleedWidth = Math.max(0, canvasWidth - rightCoreX);
   if (leftBleedWidth <= DIVISION_EPSILON && rightBleedWidth <= DIVISION_EPSILON) return;
-  // Inner stop opacity = intensity: 1.0 = immediately opaque at ±100 (hard cut), <1 = gradient ramp.
-  const innerStop = `rgba(22, 29, 37, ${panEdgeFadeIntensity})`;
+
+  if (
+    panEdgeFadeCache.canvasWidth !== canvasWidth ||
+    panEdgeFadeCache.leftCoreX !== leftCoreX ||
+    panEdgeFadeCache.rightCoreX !== rightCoreX ||
+    panEdgeFadeCache.intensity !== panEdgeFadeIntensity
+  ) {
+    // Inner stop opacity = intensity: 1.0 = immediately opaque at ±100 (hard cut), <1 = gradient ramp.
+    const innerStop = `rgba(22, 29, 37, ${panEdgeFadeIntensity})`;
+    panEdgeFadeCache.canvasWidth = canvasWidth;
+    panEdgeFadeCache.leftCoreX = leftCoreX;
+    panEdgeFadeCache.rightCoreX = rightCoreX;
+    panEdgeFadeCache.intensity = panEdgeFadeIntensity;
+
+    panEdgeFadeCache.leftGradient = null;
+    if (leftBleedWidth > DIVISION_EPSILON) {
+      const leftFade = ctx.createLinearGradient(leftCoreX, 0, 0, 0);
+      leftFade.addColorStop(0, innerStop);
+      leftFade.addColorStop(1, EDGE_FADE_SOLID);
+      panEdgeFadeCache.leftGradient = leftFade;
+    }
+
+    panEdgeFadeCache.rightGradient = null;
+    if (rightBleedWidth > DIVISION_EPSILON) {
+      const rightFade = ctx.createLinearGradient(rightCoreX, 0, canvasWidth, 0);
+      rightFade.addColorStop(0, innerStop);
+      rightFade.addColorStop(1, EDGE_FADE_SOLID);
+      panEdgeFadeCache.rightGradient = rightFade;
+    }
+  }
 
   // Fade only in the bleed gutters so +/-100 remains the localization endpoint.
-  if (leftBleedWidth > DIVISION_EPSILON) {
-    const leftFade = ctx.createLinearGradient(leftCoreX, 0, 0, 0);
-    leftFade.addColorStop(0, innerStop);
-    leftFade.addColorStop(1, EDGE_FADE_SOLID);
-    ctx.fillStyle = leftFade;
+  if (leftBleedWidth > DIVISION_EPSILON && panEdgeFadeCache.leftGradient) {
+    ctx.fillStyle = panEdgeFadeCache.leftGradient;
     ctx.fillRect(0, topY, leftBleedWidth, height);
   }
 
-  if (rightBleedWidth > DIVISION_EPSILON) {
-    const rightFade = ctx.createLinearGradient(rightCoreX, 0, canvasWidth, 0);
-    rightFade.addColorStop(0, innerStop);
-    rightFade.addColorStop(1, EDGE_FADE_SOLID);
-    ctx.fillStyle = rightFade;
+  if (rightBleedWidth > DIVISION_EPSILON && panEdgeFadeCache.rightGradient) {
+    ctx.fillStyle = panEdgeFadeCache.rightGradient;
     ctx.fillRect(rightCoreX, topY, rightBleedWidth, height);
   }
 }
@@ -774,19 +879,22 @@ function drawVisualizer() {
   const sampleRate = audioContext?.sampleRate || 44100;
   const left = leftData || ZERO_FREQUENCY_DATA;
   const right = rightData || ZERO_FREQUENCY_DATA;
-  const lineAlpha = Number(lineAlphaSlider.value);
+  const ranges = getActiveBandRanges(sampleRate, left.length);
   // Keep visual continuity: slider value 0.70 reproduces the prior fixed 1.25px line width.
   const lineWidth =
-    (Math.max(0.01, Number(lineThicknessSlider.value)) / BASE_LINE_THICKNESS_CONTROL) *
+    (lineThicknessControl / BASE_LINE_THICKNESS_CONTROL) *
     BASE_LINE_WIDTH_PX;
   const { topBands, bottomBands, splitIndex, panSmoothed } = activeBandProfile;
   const leftDrawLimit = 0;
   const rightDrawLimit = width;
+  const panIsLocked = panLockRatio >= 1 - DIVISION_EPSILON;
+  const minDeltaForUnlock = panLockRatio * 200;
 
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, cy - halfSize - DB_VERT_BLEED_PX, width, squareSize + DB_VERT_BLEED_PX * 2);
   ctx.clip();
+  ctx.globalAlpha = lineAlpha;
 
   // Top half: upper bands drawn highest->lowest to keep the center boundary prominent.
   ctx.save();
@@ -795,10 +903,9 @@ function drawVisualizer() {
   ctx.clip();
   for (let i = topBands.length - 1; i >= 0; i -= 1) {
     const band = topBands[i];
-    const l = getBandEnergy(left, band.minHz, band.maxHz, sampleRate);
-    const r = getBandEnergy(right, band.minHz, band.maxHz, sampleRate);
+    const l = getBandEnergyFromIndices(left, ranges.topStarts[i], ranges.topEnds[i]);
+    const r = getBandEnergyFromIndices(right, ranges.topStarts[i], ranges.topEnds[i]);
     const energy = (l + r) / 2;
-    const displayEnergy = energy;
     const globalIdx = splitIndex + i;
     const rawPan = toPanPoint(l, r);
     const panDelta = Math.abs(rawPan - panSmoothed[globalIdx]);
@@ -806,10 +913,6 @@ function drawVisualizer() {
     // lower values trust quiet center more, higher values hold prior pan longer.
     // Hold prior pan whenever low-energy centre readings are ambiguous.
     const centerIsTrusted = rawPan !== 0 || l + r > panHoldFloor;
-    // Pan Lock: 0 = render every trusted pan calculation, 1 = freeze pan regardless of calculation.
-    // Linear mapping uses full pan-delta span (0..200) between these endpoints.
-    const panIsLocked = panLockRatio >= 1 - DIVISION_EPSILON;
-    const minDeltaForUnlock = panLockRatio * 200;
     const passesPanLock = !panIsLocked && panDelta >= minDeltaForUnlock;
     if (centerIsTrusted && passesPanLock) {
       panSmoothed[globalIdx] = rawPan;
@@ -819,10 +922,9 @@ function drawVisualizer() {
       cy,
       halfSize,
       -1,
-      band.rgb,
-      lineAlpha,
+      band.strokeColor,
       lineWidth,
-      displayEnergy,
+      energy,
       band.logT,
       panSmoothed[globalIdx],
       leftDrawLimit,
@@ -838,16 +940,13 @@ function drawVisualizer() {
   ctx.clip();
   for (let i = 0; i < bottomBands.length; i += 1) {
     const band = bottomBands[i];
-    const l = getBandEnergy(left, band.minHz, band.maxHz, sampleRate);
-    const r = getBandEnergy(right, band.minHz, band.maxHz, sampleRate);
+    const l = getBandEnergyFromIndices(left, ranges.bottomStarts[i], ranges.bottomEnds[i]);
+    const r = getBandEnergyFromIndices(right, ranges.bottomStarts[i], ranges.bottomEnds[i]);
     const energy = (l + r) / 2;
-    const displayEnergy = energy;
     const rawPan = toPanPoint(l, r);
     const panDelta = Math.abs(rawPan - panSmoothed[i]);
     // Hold prior pan whenever low-energy centre readings are ambiguous.
     const centerIsTrusted = rawPan !== 0 || l + r > panHoldFloor;
-    const panIsLocked = panLockRatio >= 1 - DIVISION_EPSILON;
-    const minDeltaForUnlock = panLockRatio * 200;
     const passesPanLock = !panIsLocked && panDelta >= minDeltaForUnlock;
     if (centerIsTrusted && passesPanLock) {
       panSmoothed[i] = rawPan;
@@ -857,10 +956,9 @@ function drawVisualizer() {
       cy,
       halfSize,
       1,
-      band.rgb,
-      lineAlpha,
+      band.strokeColor,
       lineWidth,
-      displayEnergy,
+      energy,
       band.logT,
       panSmoothed[i],
       leftDrawLimit,
@@ -868,6 +966,7 @@ function drawVisualizer() {
     );
   }
   ctx.restore();
+  ctx.globalAlpha = 1;
 
   drawPanEdgeFade(cx, cy, halfSize, width);
 
@@ -922,7 +1021,7 @@ fileInput.addEventListener('change', async (event) => {
   if (audioContext.state === 'suspended') await audioContext.resume();
   for (const key of BAND_MODE_KEYS) BAND_PROFILES[key].panSmoothed.fill(0);
 
-  if (objectUrl) URL.revokeObjectURL(objectUrl);
+  revokeObjectUrlIfNeeded();
   objectUrl = URL.createObjectURL(file);
   audio.src = objectUrl;
   audio.currentTime = 0;
@@ -1492,6 +1591,7 @@ function setBandMode(nextMode) {
   if (!BAND_MODE_KEYS.includes(nextMode) || nextMode === activeBandMode) return;
   activeBandMode = nextMode;
   activeBandProfile = BAND_PROFILES[nextMode];
+  invalidateBandRangeCache();
   updateBandModeButtons();
   updateFrequencyOrganizer();
   drawVisualizer();
@@ -1580,6 +1680,7 @@ seekSlider.addEventListener('pointerup', async () => {
 
 panFlexSlider.addEventListener('input', () => {
   panFlexValueEl.value = Number(panFlexSlider.value).toFixed(0);
+  panFlexWidth = panFlexPercentToWidth(Number(panFlexSlider.value));
 });
 
 panFlexValueEl.addEventListener('focus', () => {
@@ -1597,6 +1698,7 @@ panFlexValueEl.addEventListener('change', () => {
     : Math.max(-50, Math.min(100, raw));
   panFlexValueEl.value = clamped.toFixed(0);
   panFlexSlider.value = clamped;
+  panFlexWidth = panFlexPercentToWidth(clamped);
 });
 
 function makeSliderPair(slider, field, min, max, decimals) {
@@ -1622,6 +1724,24 @@ makeSliderPair(waveHeightScaleSlider, waveHeightScaleValueEl, 0.25, 10.0, 2);
 makeSliderPair(waveHeightFitScaleSlider, waveHeightFitScaleValueEl, 0.01, 1.0, 2);
 makeSliderPair(analyserSmoothingSlider, analyserSmoothingValueEl, 0, 1.0, 2);
 makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
+
+lineAlphaSlider.addEventListener('input', () => {
+  lineAlpha = Number(lineAlphaSlider.value);
+});
+
+lineAlphaValueEl.addEventListener('change', () => {
+  lineAlpha = Number(lineAlphaSlider.value);
+});
+
+lineThicknessSlider.addEventListener('input', () => {
+  lineThicknessControl = Math.max(0.01, Number(lineThicknessSlider.value));
+});
+
+lineThicknessValueEl.addEventListener('change', () => {
+  lineThicknessControl = Math.max(0.01, Number(lineThicknessSlider.value));
+});
+
+panFlexWidth = panFlexPercentToWidth(Number(panFlexSlider.value));
 
 // Render Speed UI is inverse-mapped from analyser smoothing.
 syncRenderSpeedControlFromSmoothing(DEFAULT_ANALYSER_SMOOTHING);
@@ -1781,7 +1901,7 @@ drawVisualizer();
   if (file && isMp3File(file)) {
     currentFile = file;
     ensureAudioGraph();
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    revokeObjectUrlIfNeeded();
     objectUrl = URL.createObjectURL(file);
     audio.src = objectUrl;
     audio.currentTime = 0;
@@ -1794,3 +1914,9 @@ drawVisualizer();
     fileInput.value = '';
   }
 }());
+
+window.addEventListener('beforeunload', () => {
+  analysisGeneration += 1;
+  stopAnimation();
+  revokeObjectUrlIfNeeded();
+});

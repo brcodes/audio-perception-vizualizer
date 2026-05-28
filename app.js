@@ -281,6 +281,7 @@ let panLockRatio = Math.max(
 let currentFile;
 let activeFrequencyTooltipRow = null;
 let activeCategoryTooltipLabel = null;
+let pinnedCategoryIndex = -1;
 let analysisGeneration = 0;
 let panFlexWidth = 1;
 
@@ -889,6 +890,8 @@ function drawVisualizer() {
   const rightDrawLimit = width;
   const panIsLocked = panLockRatio >= 1 - DIVISION_EPSILON;
   const minDeltaForUnlock = panLockRatio * 200;
+  // Pinned category filter: null = draw all; otherwise restrict to [minHz, maxHz].
+  const pinnedCat = pinnedCategoryIndex >= 0 ? FO_PITCH_CATEGORIES[pinnedCategoryIndex] : null;
 
   ctx.save();
   ctx.beginPath();
@@ -903,6 +906,7 @@ function drawVisualizer() {
   ctx.clip();
   for (let i = topBands.length - 1; i >= 0; i -= 1) {
     const band = topBands[i];
+    if (pinnedCat && (band.hz < pinnedCat.minHz || band.hz > pinnedCat.maxHz)) continue;
     const l = getBandEnergyFromIndices(left, ranges.topStarts[i], ranges.topEnds[i]);
     const r = getBandEnergyFromIndices(right, ranges.topStarts[i], ranges.topEnds[i]);
     const energy = (l + r) / 2;
@@ -940,6 +944,7 @@ function drawVisualizer() {
   ctx.clip();
   for (let i = 0; i < bottomBands.length; i += 1) {
     const band = bottomBands[i];
+    if (pinnedCat && (band.hz < pinnedCat.minHz || band.hz > pinnedCat.maxHz)) continue;
     const l = getBandEnergyFromIndices(left, ranges.bottomStarts[i], ranges.bottomEnds[i]);
     const r = getBandEnergyFromIndices(right, ranges.bottomStarts[i], ranges.bottomEnds[i]);
     const energy = (l + r) / 2;
@@ -1295,6 +1300,51 @@ function setActiveCategoryTooltipLabel(labelEl) {
   activeCategoryTooltipLabel.classList.add('fo-category-label--tooltip-active');
 }
 
+// Show/hide FO rows to match the current pinnedCategoryIndex.
+function applyFoRowVisibility() {
+  const rows = foNotches.querySelectorAll('.fo-notch-row');
+  const cat = pinnedCategoryIndex >= 0 ? FO_PITCH_CATEGORIES[pinnedCategoryIndex] : null;
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (cat) {
+      const hz = Number(row.dataset.hz);
+      const inRange = Number.isFinite(hz) && hz >= cat.minHz && hz <= cat.maxHz;
+      row.classList.toggle('fo-row--inactive', !inRange);
+    } else {
+      row.classList.remove('fo-row--inactive');
+    }
+  }
+}
+
+// Toggle a persistent click-pinned highlight on a category label and its fork.
+function setPinnedCategory(index) {
+  const prevLabelEls = foCategoryTree.querySelectorAll('.fo-category-label--pinned');
+  const prevForkEls = foCategoryTree.querySelectorAll('.fo-fork--pinned');
+  for (let i = 0; i < prevLabelEls.length; i += 1) {
+    prevLabelEls[i].classList.remove('fo-category-label--pinned');
+  }
+  for (let i = 0; i < prevForkEls.length; i += 1) {
+    prevForkEls[i].classList.remove('fo-fork--pinned');
+  }
+  if (pinnedCategoryIndex === index) {
+    pinnedCategoryIndex = -1;
+    applyFoRowVisibility();
+    drawVisualizer();
+    return;
+  }
+  pinnedCategoryIndex = index;
+  const pinnedLabel = foCategoryTree.querySelector(
+    '.fo-category-label[data-category-index="' + index + '"]',
+  );
+  if (pinnedLabel) pinnedLabel.classList.add('fo-category-label--pinned');
+  const forkEls = foCategoryTree.querySelectorAll('[data-category-fork="' + index + '"]');
+  for (let i = 0; i < forkEls.length; i += 1) {
+    forkEls[i].classList.add('fo-fork--pinned');
+  }
+  applyFoRowVisibility();
+  drawVisualizer();
+}
+
 function bindFrequencyTooltip(row, text, swatchColor) {
   row.setAttribute('aria-label', text);
   row.addEventListener('mouseenter', (event) => {
@@ -1394,18 +1444,19 @@ function updatePitchCategoryTree() {
   }
 
   function appendHorizontal(className, left, right, y) {
-    if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(y)) return;
-    if (right - left <= DIVISION_EPSILON) return;
+    if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(y)) return null;
+    if (right - left <= DIVISION_EPSILON) return null;
     const line = document.createElement('div');
     line.className = className;
     line.style.left = left + 'px';
     line.style.width = right - left + 'px';
     line.style.top = y + 'px';
     foCategoryTree.appendChild(line);
+    return line;
   }
 
   function appendVertical(className, x, top, bottom) {
-    if (!Number.isFinite(x) || !Number.isFinite(top) || !Number.isFinite(bottom)) return;
+    if (!Number.isFinite(x) || !Number.isFinite(top) || !Number.isFinite(bottom)) return null;
     const yTop = Math.min(top, bottom);
     const yBottom = Math.max(top, bottom);
     const line = document.createElement('div');
@@ -1414,6 +1465,7 @@ function updatePitchCategoryTree() {
     line.style.top = yTop + 'px';
     line.style.height = Math.max(1, yBottom - yTop) + 'px';
     foCategoryTree.appendChild(line);
+    return line;
   }
 
   for (let i = 0; i < FO_PITCH_CATEGORIES.length; i += 1) {
@@ -1444,7 +1496,9 @@ function updatePitchCategoryTree() {
       rowCenters,
     );
     labelEl.style.top = midpointY + 'px';
+    labelEl.dataset.categoryIndex = i;
     bindCategoryTooltip(labelEl, category);
+    labelEl.addEventListener('click', () => { setPinnedCategory(i); });
     foCategoryTree.appendChild(labelEl);
 
     const labelRect = labelEl.getBoundingClientRect();
@@ -1466,10 +1520,28 @@ function updatePitchCategoryTree() {
       Math.min(rightEdgeX - 10, connectorStartX + 16),
     );
 
-    appendHorizontal('fo-category-right-notch', connectorStartX, splitSpineX, midpointY);
-    appendVertical('fo-category-split-spine', splitSpineX, endpointTopY, endpointBottomY);
-    appendHorizontal('fo-category-branch-notch', splitSpineX, rightEdgeX, endpointTopY);
-    appendHorizontal('fo-category-branch-notch', splitSpineX, rightEdgeX, endpointBottomY);
+    const rightNotchEl = appendHorizontal('fo-category-right-notch', connectorStartX, splitSpineX, midpointY);
+    const splitSpineEl = appendVertical('fo-category-split-spine', splitSpineX, endpointTopY, endpointBottomY);
+    const branchTopEl = appendHorizontal('fo-category-branch-notch', splitSpineX, rightEdgeX, endpointTopY);
+    const branchBottomEl = appendHorizontal('fo-category-branch-notch', splitSpineX, rightEdgeX, endpointBottomY);
+
+    // Tag fork elements so setPinnedCategory can highlight them by category index.
+    const forkElements = [rightNotchEl, splitSpineEl, branchTopEl, branchBottomEl];
+    for (let j = 0; j < forkElements.length; j += 1) {
+      if (forkElements[j]) forkElements[j].dataset.categoryFork = i;
+    }
+  }
+
+  // Re-apply pinned highlight after full tree rebuild.
+  if (pinnedCategoryIndex >= 0) {
+    const pinnedLabel = foCategoryTree.querySelector(
+      '.fo-category-label[data-category-index="' + pinnedCategoryIndex + '"]',
+    );
+    if (pinnedLabel) pinnedLabel.classList.add('fo-category-label--pinned');
+    const forkEls = foCategoryTree.querySelectorAll('[data-category-fork="' + pinnedCategoryIndex + '"]');
+    for (let i = 0; i < forkEls.length; i += 1) {
+      forkEls[i].classList.add('fo-fork--pinned');
+    }
   }
 }
 
@@ -1585,6 +1657,7 @@ function updateFrequencyOrganizer() {
 
   syncFrequencyOrganizerSwatchColumn();
   updatePitchCategoryTree();
+  applyFoRowVisibility();
 }
 
 function setBandMode(nextMode) {

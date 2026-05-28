@@ -418,10 +418,28 @@ body {
   color: #8a9baa;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
 }
 
 .fo-category-label.fo-category-label--tooltip-active {
   color: #e8edf2;
+}
+
+/* Click-pinned state: same box highlight as the main row hover, plus lit fork. */
+.fo-category-label--pinned {
+  background: rgba(84, 96, 109, 0.24);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(116, 133, 148, 0.45);
+  color: #e8edf2;
+  padding: 0.1em 0.35em;
+}
+
+.fo-fork--pinned {
+  background: #8ea2b6;
+}
+
+.fo-row--inactive {
+  display: none;
 }
 
 .fo-main-tree {

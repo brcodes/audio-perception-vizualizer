@@ -85,10 +85,8 @@ const ANALYSER_DYNAMIC_RANGE_DB = 70;
 // 0 = instantaneous (jittery), 1 = fully frozen; we keep the previous 0.80 smoothing default
 // and expose Render Speed as its inverse (speed = 1 - smoothing).
 const DEFAULT_ANALYSER_SMOOTHING = 0.8;
-// Side bleed lets hard-panned shapes complete without inventing pan points beyond +/-100.
-const PAN_EDGE_BLEED_PX = 200;
-// 0 = no masking (bleed fully visible); 1 = hard cutoff right at the ±100 edge.
-// Intermediate values start the fade at that opacity at ±100 and ramp to fully opaque at the clip edge.
+// 0 = no masking (post-edge content fully visible); 1 = hard cutoff right at the ±100 edge.
+// Intermediate values start the fade at that opacity at ±100 and ramp to fully opaque at the canvas edge.
 let panEdgeFadeIntensity = Number(panEdgeFadeSlider.value);
 const EDGE_FADE_SOLID = 'rgba(22, 29, 37, 1)';
 // Tiny center deadband keeps front-center visually stable against micro L/R noise.
@@ -493,11 +491,12 @@ function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
   const stageWidth = vizStage.clientWidth;
   const stageHeight = vizStage.clientHeight;
-  const side = Math.max(1, Math.floor(Math.min(stageWidth, stageHeight)));
-  canvas.style.width = side + 'px';
-  canvas.style.height = side + 'px';
-  canvas.width = Math.max(1, Math.floor(side * dpr));
-  canvas.height = Math.max(1, Math.floor(side * dpr));
+  const width = Math.max(1, Math.floor(stageWidth));
+  const height = Math.max(1, Math.floor(stageHeight));
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  canvas.width = Math.max(1, Math.floor(width * dpr));
+  canvas.height = Math.max(1, Math.floor(height * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -576,7 +575,7 @@ function frequencyToWidthFactor(logT) {
   return WIDTH_W0 * Math.pow(1000, -WIDTH_COMPRESSION * logT);
 }
 
-function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint) {
+function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, energy, logT, panPoint, leftLimit, rightLimit) {
   const heightFactor = Math.max(0, Math.min(PEAK_HEIGHT_FACTOR, amplitudeToHeightFactor(energy)));
   const height = radius * heightFactor * waveHeightScale;
 
@@ -592,8 +591,6 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
     halfWidth *= 1 + computeBinauralPanFlex(absPan);
   }
 
-  const leftLimit = centerX - radius - PAN_EDGE_BLEED_PX;
-  const rightLimit = centerX + radius + PAN_EDGE_BLEED_PX;
   const panX = centerX + (panPoint / 100) * radius;
   const minX = Math.max(leftLimit, panX - halfWidth);
   const maxX = Math.min(rightLimit, panX + halfWidth);
@@ -610,29 +607,34 @@ function drawWaveform(centerX, centerY, radius, dir, rgb, lineAlpha, lineWidth, 
   ctx.stroke();
 }
 
-function drawPanEdgeFade(centerX, centerY, radius) {
-  if (PAN_EDGE_BLEED_PX <= 0 || panEdgeFadeIntensity <= 0) return;
+function drawPanEdgeFade(centerX, centerY, radius, canvasWidth) {
+  if (panEdgeFadeIntensity <= 0) return;
   const topY = centerY - radius;
   const height = radius * 2;
   const leftCoreX = centerX - radius;
   const rightCoreX = centerX + radius;
-  const leftBleedX = leftCoreX - PAN_EDGE_BLEED_PX;
-  const rightBleedX = rightCoreX + PAN_EDGE_BLEED_PX;
+  const leftBleedWidth = Math.max(0, leftCoreX);
+  const rightBleedWidth = Math.max(0, canvasWidth - rightCoreX);
+  if (leftBleedWidth <= DIVISION_EPSILON && rightBleedWidth <= DIVISION_EPSILON) return;
   // Inner stop opacity = intensity: 1.0 = immediately opaque at ±100 (hard cut), <1 = gradient ramp.
   const innerStop = `rgba(22, 29, 37, ${panEdgeFadeIntensity})`;
 
   // Fade only in the bleed gutters so +/-100 remains the localization endpoint.
-  const leftFade = ctx.createLinearGradient(leftCoreX, 0, leftBleedX, 0);
-  leftFade.addColorStop(0, innerStop);
-  leftFade.addColorStop(1, EDGE_FADE_SOLID);
-  ctx.fillStyle = leftFade;
-  ctx.fillRect(leftBleedX, topY, PAN_EDGE_BLEED_PX, height);
+  if (leftBleedWidth > DIVISION_EPSILON) {
+    const leftFade = ctx.createLinearGradient(leftCoreX, 0, 0, 0);
+    leftFade.addColorStop(0, innerStop);
+    leftFade.addColorStop(1, EDGE_FADE_SOLID);
+    ctx.fillStyle = leftFade;
+    ctx.fillRect(0, topY, leftBleedWidth, height);
+  }
 
-  const rightFade = ctx.createLinearGradient(rightCoreX, 0, rightBleedX, 0);
-  rightFade.addColorStop(0, innerStop);
-  rightFade.addColorStop(1, EDGE_FADE_SOLID);
-  ctx.fillStyle = rightFade;
-  ctx.fillRect(rightCoreX, topY, PAN_EDGE_BLEED_PX, height);
+  if (rightBleedWidth > DIVISION_EPSILON) {
+    const rightFade = ctx.createLinearGradient(rightCoreX, 0, canvasWidth, 0);
+    rightFade.addColorStop(0, innerStop);
+    rightFade.addColorStop(1, EDGE_FADE_SOLID);
+    ctx.fillStyle = rightFade;
+    ctx.fillRect(rightCoreX, topY, rightBleedWidth, height);
+  }
 }
 
 function drawPanDisplayLine(centerX, centerY, radius) {
@@ -778,18 +780,18 @@ function drawVisualizer() {
     (Math.max(0.01, Number(lineThicknessSlider.value)) / BASE_LINE_THICKNESS_CONTROL) *
     BASE_LINE_WIDTH_PX;
   const { topBands, bottomBands, splitIndex, panSmoothed } = activeBandProfile;
-  const clipLeft = cx - halfSize - PAN_EDGE_BLEED_PX;
-  const clipWidth = squareSize + PAN_EDGE_BLEED_PX * 2;
+  const leftDrawLimit = 0;
+  const rightDrawLimit = width;
 
   ctx.save();
   ctx.beginPath();
-  ctx.rect(clipLeft, cy - halfSize - DB_VERT_BLEED_PX, clipWidth, squareSize + DB_VERT_BLEED_PX * 2);
+  ctx.rect(0, cy - halfSize - DB_VERT_BLEED_PX, width, squareSize + DB_VERT_BLEED_PX * 2);
   ctx.clip();
 
   // Top half: upper bands drawn highest->lowest to keep the center boundary prominent.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(clipLeft, cy - halfSize, clipWidth, halfSize);
+  ctx.rect(0, cy - halfSize, width, halfSize);
   ctx.clip();
   for (let i = topBands.length - 1; i >= 0; i -= 1) {
     const band = topBands[i];
@@ -823,6 +825,8 @@ function drawVisualizer() {
       displayEnergy,
       band.logT,
       panSmoothed[globalIdx],
+      leftDrawLimit,
+      rightDrawLimit,
     );
   }
   ctx.restore();
@@ -830,7 +834,7 @@ function drawVisualizer() {
   // Bottom half: lower bands drawn lowest->highest for symmetric layering.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(clipLeft, cy, clipWidth, halfSize);
+  ctx.rect(0, cy, width, halfSize);
   ctx.clip();
   for (let i = 0; i < bottomBands.length; i += 1) {
     const band = bottomBands[i];
@@ -859,11 +863,13 @@ function drawVisualizer() {
       displayEnergy,
       band.logT,
       panSmoothed[i],
+      leftDrawLimit,
+      rightDrawLimit,
     );
   }
   ctx.restore();
 
-  drawPanEdgeFade(cx, cy, halfSize);
+  drawPanEdgeFade(cx, cy, halfSize, width);
 
   if (isPanDisplayLineVisible) {
     drawPanDisplayLine(cx, cy, halfSize);

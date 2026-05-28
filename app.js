@@ -39,13 +39,13 @@ const foTooltipEl = document.createElement('div');
 foTooltipEl.className = 'fo-tooltip';
 const foTooltipMainLineEl = document.createElement('div');
 foTooltipMainLineEl.className = 'fo-tooltip-line';
-const foTooltipSwatchLineEl = document.createElement('div');
-foTooltipSwatchLineEl.className = 'fo-tooltip-swatch-line';
-const foTooltipSwatchChipEl = document.createElement('span');
-foTooltipSwatchChipEl.className = 'fo-tooltip-swatch-chip';
-foTooltipSwatchLineEl.appendChild(foTooltipSwatchChipEl);
+const foTooltipRangeLineEl = document.createElement('div');
+foTooltipRangeLineEl.className = 'fo-tooltip-range-line';
+const foTooltipSwatchListEl = document.createElement('div');
+foTooltipSwatchListEl.className = 'fo-tooltip-swatch-list';
 foTooltipEl.appendChild(foTooltipMainLineEl);
-foTooltipEl.appendChild(foTooltipSwatchLineEl);
+foTooltipEl.appendChild(foTooltipRangeLineEl);
+foTooltipEl.appendChild(foTooltipSwatchListEl);
 document.body.appendChild(foTooltipEl);
 
 const DIVISION_EPSILON = 1e-6;
@@ -118,14 +118,15 @@ const DEFAULT_BAND_MODE = 49;
 const COMPACT_ORGANIZER_MAX_BANDS = 25;
 const FO_TOOLTIP_OFFSET_X = 14;
 const FO_TOOLTIP_OFFSET_Y = 18;
+const FO_LABEL_TO_SWATCH_GAP_PX = 15;
 const FO_PITCH_CATEGORIES = Object.freeze([
-  { minHz: 20, maxHz: 60, label: 'Sub-bass (20-60 Hz)' },
-  { minHz: 60, maxHz: 250, label: 'Bass (60-250 Hz)' },
-  { minHz: 250, maxHz: 500, label: 'Low midrange (250-500 Hz)' },
-  { minHz: 500, maxHz: 2000, label: 'Midrange (500 Hz-2 kHz)' },
-  { minHz: 2000, maxHz: 4000, label: 'Upper midrange (2-4 kHz)' },
-  { minHz: 4000, maxHz: 6000, label: 'Presence (4-6 kHz)' },
-  { minHz: 6000, maxHz: 20000, label: 'Brilliance/Treble (6-20 kHz)' },
+  { minHz: 20, maxHz: 60, label: 'Sub-bass (20-60Hz)' },
+  { minHz: 60, maxHz: 250, label: 'Bass (60-250Hz)' },
+  { minHz: 250, maxHz: 500, label: 'Low midrange (250-500Hz)' },
+  { minHz: 500, maxHz: 2000, label: 'Midrange (500Hz-2kHz)' },
+  { minHz: 2000, maxHz: 4000, label: 'Upper midrange (2-4kHz)' },
+  { minHz: 4000, maxHz: 6000, label: 'Presence (4-6kHz)' },
+  { minHz: 6000, maxHz: 20000, label: 'Brilliance/Treble (6-20kHz)' },
 ]);
 const FO_CATEGORY_SPINE_X = 8;
 
@@ -263,6 +264,7 @@ let panLockRatio = Math.max(
 );
 let currentFile;
 let activeFrequencyTooltipRow = null;
+let activeCategoryTooltipLabel = null;
 let analysisGeneration = 0;
 
 function formatTime(seconds) {
@@ -1037,9 +1039,107 @@ function positionFrequencyTooltip(clientX, clientY) {
   foTooltipEl.style.top = top + 'px';
 }
 
+function clearTooltipSwatchLines() {
+  while (foTooltipSwatchListEl.firstChild) {
+    foTooltipSwatchListEl.removeChild(foTooltipSwatchListEl.firstChild);
+  }
+}
+
+function appendTooltipSwatchLine(swatchColor, text, showText) {
+  const lineEl = document.createElement('div');
+  lineEl.className = 'fo-tooltip-swatch-line';
+  if (!showText) lineEl.classList.add('fo-tooltip-swatch-line--chip-only');
+
+  const chipEl = document.createElement('span');
+  chipEl.className = 'fo-tooltip-swatch-chip';
+  chipEl.style.background = swatchColor;
+  lineEl.appendChild(chipEl);
+
+  if (showText) {
+    const textEl = document.createElement('span');
+    textEl.className = 'fo-tooltip-swatch-text';
+    textEl.textContent = text;
+    lineEl.appendChild(textEl);
+  }
+
+  foTooltipSwatchListEl.appendChild(lineEl);
+}
+
+function setTooltipContent(title, rangeText, swatches, showSwatchText) {
+  foTooltipMainLineEl.textContent = title;
+  if (rangeText) {
+    foTooltipRangeLineEl.textContent = rangeText;
+    foTooltipRangeLineEl.style.display = 'block';
+  } else {
+    foTooltipRangeLineEl.style.display = 'none';
+  }
+
+  clearTooltipSwatchLines();
+  if (!swatches.length) {
+    foTooltipSwatchListEl.style.display = 'none';
+    return;
+  }
+
+  foTooltipSwatchListEl.style.display = 'flex';
+  for (let i = 0; i < swatches.length; i += 1) {
+    appendTooltipSwatchLine(swatches[i].color, swatches[i].text, showSwatchText);
+  }
+}
+
 function showFrequencyTooltip(text, swatchColor, clientX, clientY) {
-  foTooltipMainLineEl.textContent = text;
-  foTooltipSwatchChipEl.style.background = swatchColor;
+  setTooltipContent(
+    text,
+    '',
+    [{ color: swatchColor, text: '' }],
+    false,
+  );
+  foTooltipEl.classList.add('is-visible');
+  positionFrequencyTooltip(clientX, clientY);
+}
+
+function collectCategoryTooltipSwatches(category) {
+  const rows = foNotches.querySelectorAll('.fo-notch-row');
+  const swatches = [];
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const hz = Number(rows[i].dataset.hz);
+    if (!Number.isFinite(hz)) continue;
+    if (hz < category.minHz || hz > category.maxHz) continue;
+
+    const swatchEl = rows[i].querySelector('.fo-swatch');
+    if (!swatchEl) continue;
+    const labelEl = rows[i].querySelector('.fo-label');
+
+    swatches.push({
+      hz,
+      color: swatchEl.style.background || getComputedStyle(swatchEl).backgroundColor,
+      text: labelEl ? labelEl.textContent : formatBandHz(hz),
+    });
+  }
+
+  return swatches;
+}
+
+function showCategoryTooltip(category, clientX, clientY) {
+  const swatches = collectCategoryTooltipSwatches(category);
+  let actualMinHz = category.minHz;
+  let actualMaxHz = category.maxHz;
+
+  if (swatches.length) {
+    actualMinHz = swatches[0].hz;
+    actualMaxHz = swatches[0].hz;
+    for (let i = 1; i < swatches.length; i += 1) {
+      actualMinHz = Math.min(actualMinHz, swatches[i].hz);
+      actualMaxHz = Math.max(actualMaxHz, swatches[i].hz);
+    }
+  }
+
+  setTooltipContent(
+    category.label,
+    'Actual range: ' + formatBandHz(actualMinHz) + '-' + formatBandHz(actualMaxHz),
+    swatches,
+    true,
+  );
   foTooltipEl.classList.add('is-visible');
   positionFrequencyTooltip(clientX, clientY);
 }
@@ -1049,6 +1149,10 @@ function hideFrequencyTooltip() {
   if (activeFrequencyTooltipRow) {
     activeFrequencyTooltipRow.classList.remove('fo-row--tooltip-active');
     activeFrequencyTooltipRow = null;
+  }
+  if (activeCategoryTooltipLabel) {
+    activeCategoryTooltipLabel.classList.remove('fo-category-label--tooltip-active');
+    activeCategoryTooltipLabel = null;
   }
 }
 
@@ -1061,6 +1165,15 @@ function setActiveFrequencyTooltipRow(row) {
   activeFrequencyTooltipRow.classList.add('fo-row--tooltip-active');
 }
 
+function setActiveCategoryTooltipLabel(labelEl) {
+  if (activeCategoryTooltipLabel === labelEl) return;
+  if (activeCategoryTooltipLabel) {
+    activeCategoryTooltipLabel.classList.remove('fo-category-label--tooltip-active');
+  }
+  activeCategoryTooltipLabel = labelEl;
+  activeCategoryTooltipLabel.classList.add('fo-category-label--tooltip-active');
+}
+
 function bindFrequencyTooltip(row, text, swatchColor) {
   row.setAttribute('aria-label', text);
   row.addEventListener('mouseenter', (event) => {
@@ -1071,6 +1184,20 @@ function bindFrequencyTooltip(row, text, swatchColor) {
     positionFrequencyTooltip(event.clientX, event.clientY);
   });
   row.addEventListener('mouseleave', () => {
+    hideFrequencyTooltip();
+  });
+}
+
+function bindCategoryTooltip(labelEl, category) {
+  labelEl.setAttribute('aria-label', category.label);
+  labelEl.addEventListener('mouseenter', (event) => {
+    setActiveCategoryTooltipLabel(labelEl);
+    showCategoryTooltip(category, event.clientX, event.clientY);
+  });
+  labelEl.addEventListener('mousemove', (event) => {
+    positionFrequencyTooltip(event.clientX, event.clientY);
+  });
+  labelEl.addEventListener('mouseleave', () => {
     hideFrequencyTooltip();
   });
 }
@@ -1186,6 +1313,7 @@ function updatePitchCategoryTree() {
       rowCenters,
     );
     labelEl.style.top = midpointY + 'px';
+    bindCategoryTooltip(labelEl, category);
     foCategoryTree.appendChild(labelEl);
 
     const labelRect = labelEl.getBoundingClientRect();
@@ -1270,14 +1398,22 @@ function createDividerRow(band) {
 }
 
 function syncFrequencyOrganizerSwatchColumn() {
+  const dividerRow = foNotches.querySelector('.fo-divider');
   const dividerLabel = foNotches.querySelector('.fo-divider .fo-label');
-  if (!dividerLabel) {
+  if (!dividerRow || !dividerLabel) {
     foNotches.style.removeProperty('--fo-label-column-width');
+    foNotches.style.removeProperty('--fo-label-swatch-extra-gap');
     return;
   }
 
+  const rowStyles = getComputedStyle(dividerRow);
+  const rowGap = parseFloat(rowStyles.columnGap || rowStyles.gap || '0');
+  const baseGap = Number.isFinite(rowGap) ? rowGap : 0;
+  const swatchExtraGap = Math.max(0, FO_LABEL_TO_SWATCH_GAP_PX - baseGap);
+
   const dividerLabelWidth = Math.ceil(dividerLabel.getBoundingClientRect().width);
   foNotches.style.setProperty('--fo-label-column-width', dividerLabelWidth + 'px');
+  foNotches.style.setProperty('--fo-label-swatch-extra-gap', swatchExtraGap + 'px');
 }
 
 // Rebuild the organizer panel to reflect the current activeBandProfile.

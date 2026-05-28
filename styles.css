@@ -231,6 +231,50 @@ body {
   display: block;
 }
 
+.fo-tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1200;
+  max-width: 28rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #54606d;
+  border-radius: 0.45rem;
+  background: #121820;
+  color: #e8edf2;
+  font-size: 1rem;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  box-shadow: 0 7px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(2px);
+}
+
+.fo-tooltip-line {
+  font-size: 1em;
+}
+
+.fo-tooltip-swatch-line {
+  margin-top: 0.4em;
+  display: inline-flex;
+  align-items: center;
+  font-size: 1em;
+}
+
+.fo-tooltip-swatch-chip {
+  width: 1em;
+  height: 1em;
+  border-radius: 0.333em;
+}
+
+.fo-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 /* ─── FREQUENCY ORGANIZER ─── */
 
 .frequency-organizer {
@@ -305,6 +349,24 @@ body {
   overflow: hidden;
   flex: 1;
   max-height: 32px;
+}
+
+.fo-notch-row.fo-row--tooltip-active {
+  background: rgba(84, 96, 109, 0.24);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(116, 133, 148, 0.45);
+}
+
+.fo-notch-row.fo-row--tooltip-active .fo-label {
+  color: #e8edf2;
+}
+
+.fo-notch-row.fo-row--tooltip-active .fo-tick {
+  background: #8ea2b6;
+}
+
+.fo-notch-row.fo-row--tooltip-active .fo-swatch {
+  box-shadow: 0 0 0 1px rgba(232, 237, 242, 0.55);
 }
 
 .fo-tick {

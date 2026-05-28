@@ -34,6 +34,18 @@ const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
 const frequencyOrganizer = document.getElementById('frequencyOrganizer');
 const foNotches = document.getElementById('foNotches');
 const ctx = canvas.getContext('2d');
+const foTooltipEl = document.createElement('div');
+foTooltipEl.className = 'fo-tooltip';
+const foTooltipMainLineEl = document.createElement('div');
+foTooltipMainLineEl.className = 'fo-tooltip-line';
+const foTooltipSwatchLineEl = document.createElement('div');
+foTooltipSwatchLineEl.className = 'fo-tooltip-swatch-line';
+const foTooltipSwatchChipEl = document.createElement('span');
+foTooltipSwatchChipEl.className = 'fo-tooltip-swatch-chip';
+foTooltipSwatchLineEl.appendChild(foTooltipSwatchChipEl);
+foTooltipEl.appendChild(foTooltipMainLineEl);
+foTooltipEl.appendChild(foTooltipSwatchLineEl);
+document.body.appendChild(foTooltipEl);
 
 const DIVISION_EPSILON = 1e-6;
 // Full-scale band energy maps to 94.86% of half-frame height (= 0.527 × 1.8); absorbs the
@@ -103,6 +115,8 @@ const MAX_AUDIBLE_HZ = 20000;
 const BAND_MODE_KEYS = Object.freeze([7, 15, 25, 49, 77, 99]);
 const DEFAULT_BAND_MODE = 49;
 const COMPACT_ORGANIZER_MAX_BANDS = 25;
+const FO_TOOLTIP_OFFSET_X = 14;
+const FO_TOOLTIP_OFFSET_Y = 18;
 
 const MP3_MIME_TYPES = new Set(['audio/mpeg', 'audio/mp3', 'audio/x-mp3', 'audio/mpeg3', 'audio/x-mpeg-3']);
 const ZERO_FREQUENCY_DATA = new Uint8Array(1);
@@ -237,6 +251,7 @@ let panLockRatio = Math.max(
     : DEFAULT_PAN_LOCK_RATIO),
 );
 let currentFile;
+let activeFrequencyTooltipRow = null;
 let analysisGeneration = 0;
 
 function formatTime(seconds) {
@@ -1001,13 +1016,63 @@ function formatBandHz(hz) {
   return Math.round(hz) + 'Hz';
 }
 
+function positionFrequencyTooltip(clientX, clientY) {
+  const tooltipRect = foTooltipEl.getBoundingClientRect();
+  const maxLeft = window.innerWidth - tooltipRect.width - 8;
+  const maxTop = window.innerHeight - tooltipRect.height - 8;
+  const left = Math.min(clientX + FO_TOOLTIP_OFFSET_X, Math.max(8, maxLeft));
+  const top = Math.min(clientY + FO_TOOLTIP_OFFSET_Y, Math.max(8, maxTop));
+  foTooltipEl.style.left = left + 'px';
+  foTooltipEl.style.top = top + 'px';
+}
+
+function showFrequencyTooltip(text, swatchColor, clientX, clientY) {
+  foTooltipMainLineEl.textContent = text;
+  foTooltipSwatchChipEl.style.background = swatchColor;
+  foTooltipEl.classList.add('is-visible');
+  positionFrequencyTooltip(clientX, clientY);
+}
+
+function hideFrequencyTooltip() {
+  foTooltipEl.classList.remove('is-visible');
+  if (activeFrequencyTooltipRow) {
+    activeFrequencyTooltipRow.classList.remove('fo-row--tooltip-active');
+    activeFrequencyTooltipRow = null;
+  }
+}
+
+function setActiveFrequencyTooltipRow(row) {
+  if (activeFrequencyTooltipRow === row) return;
+  if (activeFrequencyTooltipRow) {
+    activeFrequencyTooltipRow.classList.remove('fo-row--tooltip-active');
+  }
+  activeFrequencyTooltipRow = row;
+  activeFrequencyTooltipRow.classList.add('fo-row--tooltip-active');
+}
+
+function bindFrequencyTooltip(row, text, swatchColor) {
+  row.setAttribute('aria-label', text);
+  row.addEventListener('mouseenter', (event) => {
+    setActiveFrequencyTooltipRow(row);
+    showFrequencyTooltip(text, swatchColor, event.clientX, event.clientY);
+  });
+  row.addEventListener('mousemove', (event) => {
+    positionFrequencyTooltip(event.clientX, event.clientY);
+  });
+  row.addEventListener('mouseleave', () => {
+    hideFrequencyTooltip();
+  });
+}
+
 // Build one color-notch row for a regular band.
 function createNotchRow(band) {
   const tooltip = formatBandHz(band.hz) +
     ' (' + Math.round(band.minHz) + '\u2013' + Math.round(band.maxHz) + 'Hz)';
+  const swatchColor =
+    'rgb(' + band.rgb.r + ',' + band.rgb.g + ',' + band.rgb.b + ')';
   const row = document.createElement('div');
   row.className = 'fo-notch-row';
-  row.title = tooltip;
+  bindFrequencyTooltip(row, tooltip, swatchColor);
 
   const tick = document.createElement('div');
   tick.className = 'fo-tick';
@@ -1018,8 +1083,7 @@ function createNotchRow(band) {
 
   const swatch = document.createElement('div');
   swatch.className = 'fo-swatch';
-  swatch.style.background =
-    'rgb(' + band.rgb.r + ',' + band.rgb.g + ',' + band.rgb.b + ')';
+  swatch.style.background = swatchColor;
 
   row.appendChild(tick);
   row.appendChild(label);
@@ -1027,11 +1091,14 @@ function createNotchRow(band) {
   return row;
 }
 
-// Build the center divider row: bigger label in parens, no color swatch.
+// Build the center divider row: divider label in parens with a matching swatch.
 function createDividerRow(band) {
   const row = document.createElement('div');
   row.className = 'fo-notch-row fo-divider';
-  row.title = 'Dividing pitch: ' + formatBandHz(band.hz);
+  const tooltip = 'Dividing pitch: ' + formatBandHz(band.hz);
+  const swatchColor =
+    'rgb(' + band.rgb.r + ',' + band.rgb.g + ',' + band.rgb.b + ')';
+  bindFrequencyTooltip(row, tooltip, swatchColor);
 
   const tick = document.createElement('div');
   tick.className = 'fo-tick';
@@ -1040,14 +1107,20 @@ function createDividerRow(band) {
   label.className = 'fo-label';
   label.textContent = '(' + formatBandHz(band.hz) + ')';
 
+  const swatch = document.createElement('div');
+  swatch.className = 'fo-swatch';
+  swatch.style.background = swatchColor;
+
   row.appendChild(tick);
   row.appendChild(label);
+  row.appendChild(swatch);
   return row;
 }
 
 // Rebuild the organizer panel to reflect the current activeBandProfile.
 // Called once on init and again whenever the band mode changes.
 function updateFrequencyOrganizer() {
+  hideFrequencyTooltip();
   // Clear existing notches without innerHTML
   while (foNotches.firstChild) foNotches.removeChild(foNotches.firstChild);
 

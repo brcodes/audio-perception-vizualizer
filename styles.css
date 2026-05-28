@@ -23,6 +23,7 @@ body {
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-rows: auto auto 1fr;
+  background: #161d25;
 }
 
 .controls {
@@ -240,14 +241,14 @@ body {
   background: #1a2129;
   border-left: 1px solid #2f3944;
   padding: 0.5rem 0.5rem 0.5rem 0;
-  min-width: 108px;
-  max-width: 148px;
+  min-width: 148px;
+  max-width: 188px;
   overflow: hidden;
 }
 
 .fo-header {
-  font-size: 0.62rem;
-  color: #6a7d8e;
+  font-size: var(--control-font-size);
+  color: #e8edf2;
   letter-spacing: 0.04em;
   padding: 0 0 0.35rem 0.75rem;
   border-bottom: 1px solid #2f3944;
@@ -260,6 +261,7 @@ body {
   position: relative;
   min-height: 0;
   overflow: hidden;
+  padding-bottom: 6px;
 }
 
 /* the vertical spine line */
@@ -270,6 +272,18 @@ body {
   top: 0;
   bottom: 0;
   width: 1px;
+  background: #3a4858;
+  pointer-events: none;
+}
+
+/* terminal notch for the frequency tree (all modes) */
+.fo-line-container::after {
+  content: '';
+  position: absolute;
+  left: 11px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
   background: #3a4858;
   pointer-events: none;
 }
@@ -336,7 +350,7 @@ body {
 
 .frequency-organizer--compact .fo-line-container {
   flex: 0 0 auto;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .frequency-organizer--compact .fo-notches {

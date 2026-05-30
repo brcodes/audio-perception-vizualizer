@@ -140,6 +140,13 @@ const PERCEPTUAL_EAR_LEVEL_HZ = 1000;
 const PERCEPTUAL_PADDING_PX = 20;
 const PERCEPTUAL_PHON_GUIDES = Object.freeze([20, 40, 60, 80]);
 const PERCEPTUAL_GRID_FREQS = Object.freeze([30, 60, 120, 250, 500, 1000, 2000, 4000, 8000, 16000]);
+// FFT-band RMS energy is conservative relative to perceived listening level; this calibration
+// maps active music into a practical 20..95 dBSPL display window while keeping silence dark.
+const PERCEPTUAL_SPL_FLOOR_DB = 20;
+const PERCEPTUAL_SPL_SPAN_DB = 75;
+const PERCEPTUAL_ENERGY_EXPONENT = 0.6;
+const PERCEPTUAL_ENERGY_FLOOR = 0.003;
+const PERCEPTUAL_ENERGY_BACKSTOP = 0.32;
 // Vertical bleed lets the dB edge labels at the top/bottom of the square straddle
 // the edge, mirroring how the pan labels at ±100 straddle the left/right edges.
 const DB_VERT_BLEED_PX = 8;
@@ -236,10 +243,13 @@ function createLogBands(count) {
 function createBandProfile(bands) {
   for (let i = 0; i < bands.length; i += 1) {
     const { r, g, b } = bands[i].rgb;
+    const pr = Math.min(255, Math.round(r * 1.2 + 28));
+    const pg = Math.min(255, Math.round(g * 1.15 + 24));
+    const pb = Math.min(255, Math.round(b * 1.25 + 30));
     bands[i].idx = i;
     bands[i].strokeColor = `rgb(${r}, ${g}, ${b})`;
-    bands[i].fillColor = `rgba(${r}, ${g}, ${b}, 1)`;
-    bands[i].clearColor = `rgba(${r}, ${g}, ${b}, 0)`;
+    bands[i].fillColor = `rgba(${pr}, ${pg}, ${pb}, 1)`;
+    bands[i].clearColor = `rgba(${pr}, ${pg}, ${pb}, 0)`;
   }
   const splitIndex = Math.floor(bands.length / 2);
   const topBands = bands.slice(splitIndex);
@@ -767,10 +777,9 @@ function drawAsymmetricBlob(cx, cy, rx, ryLo, ryHi, color, clearColor, alpha, wi
   const topRadius = Math.max(rx, ryHi);
   const bottomRadius = Math.max(rx, ryLo);
 
-  const topGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, topRadius * 1.05);
-  topGradient.addColorStop(0, color);
-  topGradient.addColorStop(1, clearColor);
-
+  // Top half — clip to y < cy, then translate+scale to the blob center.
+  // Gradient must be created inside the transform block so its (0,0) origin
+  // coincides with the arc center in the current (scaled) coordinate space.
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.beginPath();
@@ -779,6 +788,9 @@ function drawAsymmetricBlob(cx, cy, rx, ryLo, ryHi, color, clearColor, alpha, wi
   ctx.save();
   ctx.translate(cx, cy);
   ctx.scale(rx / topRadius, ryHi / topRadius);
+  const topGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, topRadius * 1.05);
+  topGradient.addColorStop(0, color);
+  topGradient.addColorStop(1, clearColor);
   ctx.beginPath();
   ctx.arc(0, 0, topRadius, 0, Math.PI * 2);
   ctx.fillStyle = topGradient;
@@ -786,10 +798,7 @@ function drawAsymmetricBlob(cx, cy, rx, ryLo, ryHi, color, clearColor, alpha, wi
   ctx.restore();
   ctx.restore();
 
-  const bottomGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, bottomRadius * 1.05);
-  bottomGradient.addColorStop(0, color);
-  bottomGradient.addColorStop(1, clearColor);
-
+  // Bottom half — clip to y >= cy.
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.beginPath();
@@ -798,6 +807,9 @@ function drawAsymmetricBlob(cx, cy, rx, ryLo, ryHi, color, clearColor, alpha, wi
   ctx.save();
   ctx.translate(cx, cy);
   ctx.scale(rx / bottomRadius, ryLo / bottomRadius);
+  const bottomGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, bottomRadius * 1.05);
+  bottomGradient.addColorStop(0, color);
+  bottomGradient.addColorStop(1, clearColor);
   ctx.beginPath();
   ctx.arc(0, 0, bottomRadius, 0, Math.PI * 2);
   ctx.fillStyle = bottomGradient;
@@ -1250,10 +1262,13 @@ function drawVisualizerPerceptual() {
       panSmoothed[band.idx] = rawPan;
     }
 
-    const dBSPL = energy * 82 - distAttenDB;
+    if (energy < PERCEPTUAL_ENERGY_FLOOR) continue;
+    const calibratedEnergy = Math.pow(clamp(energy, 0, 1), PERCEPTUAL_ENERGY_EXPONENT);
+    const dBSPL = PERCEPTUAL_SPL_FLOOR_DB + calibratedEnergy * PERCEPTUAL_SPL_SPAN_DB - distAttenDB;
     const phon = isoPhons(band.hz, dBSPL);
-    const pNorm = clamp(phon / PERCEPTUAL_MAX_PHON, 0, 1);
-    if (pNorm < 0.02) continue;
+    const phonNorm = clamp(phon / PERCEPTUAL_MAX_PHON, 0, 1);
+    const pNorm = Math.max(phonNorm, calibratedEnergy * PERCEPTUAL_ENERGY_BACKSTOP);
+    if (pNorm < 0.01) continue;
 
     const beam = beaming(band.hz, perceptualConeInches);
     const panNorm = scalePerceptualPan(panSmoothed[band.idx] / 100, band.hz, beam);

@@ -2,6 +2,8 @@ const canvas = document.getElementById('vizCanvas');
 const vizStage = document.getElementById('vizStage');
 const fileInput = document.getElementById('fileInput');
 const playPauseBtn = document.getElementById('playPauseBtn');
+const modelABtn = document.getElementById('modelABtn');
+const modelBBtn = document.getElementById('modelBBtn');
 const seekSlider = document.getElementById('seekSlider');
 const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
@@ -31,7 +33,24 @@ const waveHeightAutoFitBtn = document.getElementById('waveHeightAutoFitBtn');
 const analyserSmoothingSlider = document.getElementById('analyserSmoothingSlider');
 const analyserSmoothingValueEl = document.getElementById('analyserSmoothingValue');
 const binauralPanBtn = document.getElementById('binauralPanBtn');
+const perceptualSpeakerBtn = document.getElementById('perceptualSpeakerBtn');
+const perceptualHeadphonesBtn = document.getElementById('perceptualHeadphonesBtn');
+const perceptualCone18Btn = document.getElementById('perceptualCone18Btn');
+const perceptualCone65Btn = document.getElementById('perceptualCone65Btn');
+const perceptualCone1Btn = document.getElementById('perceptualCone1Btn');
+const perceptualDistanceSlider = document.getElementById('perceptualDistanceSlider');
+const perceptualDistanceValueEl = document.getElementById('perceptualDistanceValue');
+const perceptualAlphaScaleSlider = document.getElementById('perceptualAlphaScaleSlider');
+const perceptualAlphaScaleValueEl = document.getElementById('perceptualAlphaScaleValue');
+const perceptualAlphaMinSlider = document.getElementById('perceptualAlphaMinSlider');
+const perceptualAlphaMinValueEl = document.getElementById('perceptualAlphaMinValue');
+const perceptualAlphaMaxSlider = document.getElementById('perceptualAlphaMaxSlider');
+const perceptualAlphaMaxValueEl = document.getElementById('perceptualAlphaMaxValue');
+const togglePhonGridBtn = document.getElementById('togglePhonGridBtn');
+const toggleEarLevelBtn = document.getElementById('toggleEarLevelBtn');
 const bandModeButtons = Array.from(document.querySelectorAll('.band-mode-btn'));
+const modelAControls = Array.from(document.querySelectorAll('.model-a-control'));
+const modelBControls = Array.from(document.querySelectorAll('.model-b-control'));
 const frequencyOrganizer = document.getElementById('frequencyOrganizer');
 const toggleFoOrganizerBtn = document.getElementById('toggleFoOrganizerBtn');
 const foNotches = document.getElementById('foNotches');
@@ -79,6 +98,9 @@ const DEFAULT_WAVE_WIDTH_SCALE = 2.50;
 const DEFAULT_WAVE_HEIGHT_SCALE = 1.35;
 const BASE_LINE_THICKNESS_CONTROL = 0.70;
 const BASE_LINE_WIDTH_PX = 1.25;
+const MODEL_A = 'classic';
+const MODEL_B = 'perceptual';
+const MAX_PERCEPTUAL_BAND_MODE = 25;
 // -30 dBFS ceiling matches the Web Audio AnalyserNode default: signals above -30 dBFS clip to 255,
 // so the bulk of a loud mix immediately drives band energy toward 1.0 and fills the display.
 const ANALYSER_FIXED_MAX_DB = -30;
@@ -112,6 +134,12 @@ const DB_DISPLAY_LINE_COLOR = 'rgba(70, 70, 70, 0.5)';
 const DB_DISPLAY_LINE_WIDTH = 1;
 const DB_DISPLAY_NOTCH_HALF_WIDTH = 4;
 const DB_DISPLAY_MINOR_NOTCH_SCALE = 0.5;
+const PERCEPTUAL_MIN_PHON = 0;
+const PERCEPTUAL_MAX_PHON = 80;
+const PERCEPTUAL_EAR_LEVEL_HZ = 1000;
+const PERCEPTUAL_PADDING_PX = 20;
+const PERCEPTUAL_PHON_GUIDES = Object.freeze([20, 40, 60, 80]);
+const PERCEPTUAL_GRID_FREQS = Object.freeze([30, 60, 120, 250, 500, 1000, 2000, 4000, 8000, 16000]);
 // Vertical bleed lets the dB edge labels at the top/bottom of the square straddle
 // the edge, mirroring how the pan labels at ±100 straddle the left/right edges.
 const DB_VERT_BLEED_PX = 8;
@@ -208,7 +236,10 @@ function createLogBands(count) {
 function createBandProfile(bands) {
   for (let i = 0; i < bands.length; i += 1) {
     const { r, g, b } = bands[i].rgb;
+    bands[i].idx = i;
     bands[i].strokeColor = `rgb(${r}, ${g}, ${b})`;
+    bands[i].fillColor = `rgba(${r}, ${g}, ${b}, 1)`;
+    bands[i].clearColor = `rgba(${r}, ${g}, ${b}, 0)`;
   }
   const splitIndex = Math.floor(bands.length / 2);
   const topBands = bands.slice(splitIndex);
@@ -218,6 +249,7 @@ function createBandProfile(bands) {
     bottomBands,
     topBands,
     allBands: topBands.concat(bottomBands),
+    bandsByHz: bands.slice(),
     // Per-band smoothed pan state persists across frames for temporal stability.
     panSmoothed: new Float32Array(bands.length),
   };
@@ -240,6 +272,15 @@ const BAND_PROFILES = {
 
 let activeBandMode = DEFAULT_BAND_MODE;
 let activeBandProfile = BAND_PROFILES[activeBandMode];
+let activeModel = MODEL_A;
+let perceptualAudioMode = 'speaker';
+let perceptualConeInches = 6.5;
+let perceptualDistanceM = Number(perceptualDistanceSlider.value);
+let perceptualAlphaScale = Number(perceptualAlphaScaleSlider.value);
+let perceptualAlphaMin = Number(perceptualAlphaMinSlider.value);
+let perceptualAlphaMax = Number(perceptualAlphaMaxSlider.value);
+let isPerceptualPhonGuideVisible = false;
+let isPerceptualEarLevelVisible = true;
 
 const audio = new Audio();
 audio.crossOrigin = 'anonymous';
@@ -293,6 +334,8 @@ const activeBandRangeCache = {
   topEnds: new Uint16Array(0),
   bottomStarts: new Uint16Array(0),
   bottomEnds: new Uint16Array(0),
+  allStarts: new Uint16Array(0),
+  allEnds: new Uint16Array(0),
 };
 
 const panEdgeFadeCache = {
@@ -583,11 +626,13 @@ function getActiveBandRanges(sampleRate, binCount) {
   }
 
   const maxIndex = Math.max(0, binCount - 1);
-  const { topBands, bottomBands } = activeBandProfile;
+  const { topBands, bottomBands, bandsByHz } = activeBandProfile;
   const topStarts = new Uint16Array(topBands.length);
   const topEnds = new Uint16Array(topBands.length);
   const bottomStarts = new Uint16Array(bottomBands.length);
   const bottomEnds = new Uint16Array(bottomBands.length);
+  const allStarts = new Uint16Array(bandsByHz.length);
+  const allEnds = new Uint16Array(bandsByHz.length);
 
   for (let i = 0; i < topBands.length; i += 1) {
     topStarts[i] = hzToIndex(topBands[i].minHz, sampleRate, maxIndex);
@@ -599,6 +644,11 @@ function getActiveBandRanges(sampleRate, binCount) {
     bottomEnds[i] = hzToIndex(bottomBands[i].maxHz, sampleRate, maxIndex);
   }
 
+  for (let i = 0; i < bandsByHz.length; i += 1) {
+    allStarts[i] = hzToIndex(bandsByHz[i].minHz, sampleRate, maxIndex);
+    allEnds[i] = hzToIndex(bandsByHz[i].maxHz, sampleRate, maxIndex);
+  }
+
   activeBandRangeCache.mode = activeBandMode;
   activeBandRangeCache.sampleRate = sampleRate;
   activeBandRangeCache.binCount = binCount;
@@ -606,6 +656,8 @@ function getActiveBandRanges(sampleRate, binCount) {
   activeBandRangeCache.topEnds = topEnds;
   activeBandRangeCache.bottomStarts = bottomStarts;
   activeBandRangeCache.bottomEnds = bottomEnds;
+  activeBandRangeCache.allStarts = allStarts;
+  activeBandRangeCache.allEnds = allEnds;
   return activeBandRangeCache;
 }
 
@@ -657,6 +709,101 @@ function computeBinauralPanFlex(absPan) {
 // so bass waveforms appear proportionally wider than treble, mirroring cycle length.
 function frequencyToWidthFactor(logT) {
   return WIDTH_W0 * Math.pow(1000, -WIDTH_COMPRESSION * logT);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+// Simplified ISO 226-inspired loudness model used to map physical level to perceived loudness.
+function isoPhons(hz, dBSPL) {
+  const f = clamp(hz, MIN_AUDIBLE_HZ, MAX_AUDIBLE_HZ);
+  const fk = f / 1000;
+  const thresh =
+    3.64 * Math.pow(fk, -0.8) -
+    6.5 * Math.exp(-0.6 * Math.pow(fk - 3.3, 2)) +
+    1e-3 * Math.pow(fk, 4);
+  const pinnaPeak = 8 * Math.exp(-0.5 * Math.pow(Math.log2(f / 3500), 2) / 1.1);
+  const bassCut = 14 * Math.max(0, 1 - Math.min(1, f / 200));
+  const hiRoll = 5 * Math.max(0, (f - 9000) / 9000);
+  const correction = pinnaPeak - bassCut - hiRoll;
+  return Math.max(PERCEPTUAL_MIN_PHON, dBSPL + correction - thresh * 0.15);
+}
+
+function beaming(hz, coneInches) {
+  const diameterM = coneInches * 0.0254;
+  const ratio = Math.PI * diameterM / (343 / Math.max(hz, 1));
+  return clamp((ratio - 0.4) / 2.2, 0, 1);
+}
+
+function logHzToY(hz, topY, bottomY, pad) {
+  const t = Math.log2(clamp(hz, MIN_AUDIBLE_HZ, MAX_AUDIBLE_HZ) / MIN_AUDIBLE_HZ) /
+    Math.log2(MAX_AUDIBLE_HZ / MIN_AUDIBLE_HZ);
+  return bottomY - pad - t * ((bottomY - topY) - pad * 2);
+}
+
+function perceptualGravityBias(logT) {
+  return -0.35 + 0.70 * clamp(logT, 0, 1);
+}
+
+function perceptualYExpLo(logT) {
+  return clamp(0.65 - 0.35 * clamp(logT, 0, 1), 0.30, 0.65);
+}
+
+function perceptualYExpHi(logT) {
+  return clamp(0.35 + 0.35 * clamp(logT, 0, 1), 0.35, 0.70);
+}
+
+function scalePerceptualPan(panNorm, hz, beam) {
+  if (perceptualAudioMode === 'speaker') {
+    const panFeel = 0.35 + 0.65 * beam;
+    return clamp(panNorm * panFeel, -1, 1);
+  }
+  const ildScale = Math.min(1.6, 1 + (hz / 4000) * 0.5);
+  return clamp(panNorm * ildScale, -1, 1);
+}
+
+function drawAsymmetricBlob(cx, cy, rx, ryLo, ryHi, color, clearColor, alpha, width, height) {
+  const topRadius = Math.max(rx, ryHi);
+  const bottomRadius = Math.max(rx, ryLo);
+
+  const topGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, topRadius * 1.05);
+  topGradient.addColorStop(0, color);
+  topGradient.addColorStop(1, clearColor);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.rect(0, 0, width, cy);
+  ctx.clip();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(rx / topRadius, ryHi / topRadius);
+  ctx.beginPath();
+  ctx.arc(0, 0, topRadius, 0, Math.PI * 2);
+  ctx.fillStyle = topGradient;
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
+
+  const bottomGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, bottomRadius * 1.05);
+  bottomGradient.addColorStop(0, color);
+  bottomGradient.addColorStop(1, clearColor);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.rect(0, cy, width, height - cy);
+  ctx.clip();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(rx / bottomRadius, ryLo / bottomRadius);
+  ctx.beginPath();
+  ctx.arc(0, 0, bottomRadius, 0, Math.PI * 2);
+  ctx.fillStyle = bottomGradient;
+  ctx.fill();
+  ctx.restore();
+  ctx.restore();
 }
 
 function drawWaveform(centerX, centerY, radius, dir, strokeColor, lineWidth, energy, logT, panPoint, leftLimit, rightLimit) {
@@ -858,7 +1005,7 @@ function drawDbDisplayLine(centerX, centerY, radius) {
   ctx.fillText(isPanDisplayLineVisible ? '(p, db)' : 'db', centerX - 5, centerY + 5);
 }
 
-function drawVisualizer() {
+function drawVisualizerClassic() {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   ctx.clearRect(0, 0, width, height);
@@ -986,6 +1133,186 @@ function drawVisualizer() {
   ctx.restore();
 }
 
+function drawPerceptualPitchGrid(leftX, rightX, topY, bottomY) {
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.lineWidth = 0.5;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.font = '8px monospace';
+  ctx.fillStyle = 'rgba(180, 190, 200, 0.72)';
+
+  for (let i = 0; i < PERCEPTUAL_GRID_FREQS.length; i += 1) {
+    const hz = PERCEPTUAL_GRID_FREQS[i];
+    const y = logHzToY(hz, topY, bottomY, PERCEPTUAL_PADDING_PX);
+    ctx.beginPath();
+    ctx.moveTo(leftX, y);
+    ctx.lineTo(rightX, y);
+    ctx.stroke();
+    const label = hz >= 1000 ? `${Math.round(hz / 1000)}kHz` : `${hz}Hz`;
+    ctx.fillText(label, leftX + 4, y - 2);
+  }
+}
+
+function drawPerceptualEarLevel(leftX, rightX, topY, bottomY) {
+  if (!isPerceptualEarLevelVisible) return;
+  const y = logHzToY(PERCEPTUAL_EAR_LEVEL_HZ, topY, bottomY, PERCEPTUAL_PADDING_PX);
+  ctx.strokeStyle = 'rgba(214, 224, 235, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(leftX, y);
+  ctx.lineTo(rightX, y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.font = '8px monospace';
+  ctx.fillStyle = 'rgba(214, 224, 235, 0.7)';
+  ctx.fillText('ear level', rightX - 4, y - 2);
+}
+
+function drawPerceptualPhonGuide(rightX, bottomY, halfSize) {
+  if (!isPerceptualPhonGuideVisible) return;
+  const guideCenterX = rightX - 44;
+  const guideCenterY = bottomY - 44;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(170, 182, 196, 0.45)';
+  ctx.fillStyle = 'rgba(190, 200, 212, 0.74)';
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+
+  for (let i = 0; i < PERCEPTUAL_PHON_GUIDES.length; i += 1) {
+    const phon = PERCEPTUAL_PHON_GUIDES[i];
+    const pNorm = phon / PERCEPTUAL_MAX_PHON;
+    const r = Math.max(4, pNorm * 0.18 * (halfSize * 2));
+    ctx.beginPath();
+    ctx.arc(guideCenterX, guideCenterY, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillText(`${phon} ph`, guideCenterX + r + 4, guideCenterY);
+  }
+  ctx.restore();
+}
+
+function drawVisualizerPerceptual() {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  ctx.clearRect(0, 0, width, height);
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const halfSize = Math.min(width, height) * 0.42;
+  const squareSize = halfSize * 2;
+  const leftX = cx - halfSize;
+  const rightX = cx + halfSize;
+  const topY = cy - halfSize;
+  const bottomY = cy + halfSize;
+
+  ctx.fillStyle = '#161d25';
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#0f141a';
+  ctx.fillRect(leftX, topY, squareSize, squareSize);
+  ctx.strokeStyle = '#3c4752';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(leftX, topY, squareSize, squareSize);
+
+  drawPerceptualPitchGrid(leftX, rightX, topY, bottomY);
+  drawPerceptualEarLevel(leftX, rightX, topY, bottomY);
+
+  const sampleRate = audioContext?.sampleRate || 44100;
+  const left = leftData || ZERO_FREQUENCY_DATA;
+  const right = rightData || ZERO_FREQUENCY_DATA;
+  const ranges = getActiveBandRanges(sampleRate, left.length);
+  const { bandsByHz, panSmoothed } = activeBandProfile;
+  const panIsLocked = panLockRatio >= 1 - DIVISION_EPSILON;
+  const minDeltaForUnlock = panLockRatio * 200;
+  const pinnedCat = pinnedCategoryIndex >= 0 ? FO_PITCH_CATEGORIES[pinnedCategoryIndex] : null;
+  const distAttenDB = 20 * Math.log10(Math.max(0.3, perceptualDistanceM));
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(leftX, topY, squareSize, squareSize);
+  ctx.clip();
+
+  for (let i = 0; i < bandsByHz.length; i += 1) {
+    const band = bandsByHz[i];
+    if (pinnedCat && (band.hz < pinnedCat.minHz || band.hz > pinnedCat.maxHz)) continue;
+
+    const l = getBandEnergyFromIndices(left, ranges.allStarts[i], ranges.allEnds[i]);
+    const r = getBandEnergyFromIndices(right, ranges.allStarts[i], ranges.allEnds[i]);
+    const energy = (l + r) / 2;
+    const rawPan = toPanPoint(l, r);
+    const panDelta = Math.abs(rawPan - panSmoothed[band.idx]);
+    const centerIsTrusted = rawPan !== 0 || l + r > panHoldFloor;
+    const passesPanLock = !panIsLocked && panDelta >= minDeltaForUnlock;
+    if (centerIsTrusted && passesPanLock) {
+      panSmoothed[band.idx] = rawPan;
+    }
+
+    const dBSPL = energy * 82 - distAttenDB;
+    const phon = isoPhons(band.hz, dBSPL);
+    const pNorm = clamp(phon / PERCEPTUAL_MAX_PHON, 0, 1);
+    if (pNorm < 0.02) continue;
+
+    const beam = beaming(band.hz, perceptualConeInches);
+    const panNorm = scalePerceptualPan(panSmoothed[band.idx] / 100, band.hz, beam);
+    const baseY = logHzToY(band.hz, topY, bottomY, PERCEPTUAL_PADDING_PX);
+    const gravDrift = perceptualGravityBias(band.logT) * pNorm * 0.08 * squareSize;
+    const blobY = clamp(baseY + gravDrift, topY + PERCEPTUAL_PADDING_PX, bottomY - PERCEPTUAL_PADDING_PX);
+
+    const baseR = pNorm * 0.18 * squareSize;
+    const xSpread = perceptualAudioMode === 'headphones'
+      ? baseR * (0.6 + 0.4 * (1 - beam))
+      : baseR * (0.9 - 0.55 * beam);
+    const totalYSpread = baseR * (perceptualAudioMode === 'headphones' ? 0.5 : (0.3 + 0.25 * (1 - beam) + 0.2 * beam));
+    const yLo = totalYSpread * perceptualYExpLo(band.logT) * 1.6;
+    const yHi = totalYSpread * perceptualYExpHi(band.logT) * 1.6;
+    if (xSpread <= DIVISION_EPSILON || yLo <= DIVISION_EPSILON || yHi <= DIVISION_EPSILON) continue;
+
+    const blobX = cx + panNorm * halfSize;
+    const depthAlpha = 0.55 + 0.45 * band.logT;
+    const baseAlpha = pNorm * depthAlpha * perceptualAlphaScale;
+    const alpha = clamp(baseAlpha, perceptualAlphaMin, perceptualAlphaMax);
+
+    drawAsymmetricBlob(
+      blobX,
+      blobY,
+      xSpread * 1.85,
+      yLo * 1.85,
+      yHi * 1.85,
+      band.fillColor,
+      band.clearColor,
+      alpha * 0.18,
+      width,
+      height,
+    );
+    drawAsymmetricBlob(
+      blobX,
+      blobY,
+      xSpread,
+      yLo,
+      yHi,
+      band.fillColor,
+      band.clearColor,
+      alpha,
+      width,
+      height,
+    );
+  }
+
+  ctx.restore();
+  drawPerceptualPhonGuide(rightX, bottomY, halfSize);
+}
+
+function drawVisualizer() {
+  if (activeModel === MODEL_B) {
+    drawVisualizerPerceptual();
+    return;
+  }
+  drawVisualizerClassic();
+}
+
 function animate() {
   if (analyserLeft && analyserRight) {
     analyserLeft.getByteFrequencyData(leftData);
@@ -1040,7 +1367,7 @@ fileInput.addEventListener('change', async (event) => {
   seekSlider.disabled = true;
   currentTimeEl.textContent = '0:00';
   totalTimeEl.textContent = '0:00';
-  if (isAutoFitHeight) analyzeAndAutoFitWaveHeight(file);
+  if (isAutoFitHeight && activeModel === MODEL_A) analyzeAndAutoFitWaveHeight(file);
 });
 
 async function togglePlayPause() {
@@ -1139,6 +1466,87 @@ function updateBandModeButtons() {
     button.classList.toggle('is-active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   }
+}
+
+function updateModelToggleState() {
+  const isClassic = activeModel === MODEL_A;
+  modelABtn.classList.toggle('is-active', isClassic);
+  modelBBtn.classList.toggle('is-active', !isClassic);
+  modelABtn.setAttribute('aria-pressed', isClassic ? 'true' : 'false');
+  modelBBtn.setAttribute('aria-pressed', isClassic ? 'false' : 'true');
+}
+
+function updatePerceptualModeToggleState() {
+  const isSpeaker = perceptualAudioMode === 'speaker';
+  perceptualSpeakerBtn.classList.toggle('is-active', isSpeaker);
+  perceptualHeadphonesBtn.classList.toggle('is-active', !isSpeaker);
+  perceptualSpeakerBtn.setAttribute('aria-pressed', isSpeaker ? 'true' : 'false');
+  perceptualHeadphonesBtn.setAttribute('aria-pressed', isSpeaker ? 'false' : 'true');
+}
+
+function updatePerceptualConeToggleState() {
+  const isSub = Math.abs(perceptualConeInches - 18) < DIVISION_EPSILON;
+  const isMid = Math.abs(perceptualConeInches - 6.5) < DIVISION_EPSILON;
+  const isTweet = Math.abs(perceptualConeInches - 1) < DIVISION_EPSILON;
+  perceptualCone18Btn.classList.toggle('is-active', isSub);
+  perceptualCone65Btn.classList.toggle('is-active', isMid);
+  perceptualCone1Btn.classList.toggle('is-active', isTweet);
+  perceptualCone18Btn.setAttribute('aria-pressed', isSub ? 'true' : 'false');
+  perceptualCone65Btn.setAttribute('aria-pressed', isMid ? 'true' : 'false');
+  perceptualCone1Btn.setAttribute('aria-pressed', isTweet ? 'true' : 'false');
+}
+
+function updatePerceptualOverlayToggleStates() {
+  togglePhonGridBtn.textContent = isPerceptualPhonGuideVisible ? 'Phon Guide: On' : 'Phon Guide: Off';
+  togglePhonGridBtn.classList.toggle('is-active', isPerceptualPhonGuideVisible);
+  togglePhonGridBtn.setAttribute('aria-pressed', isPerceptualPhonGuideVisible ? 'true' : 'false');
+
+  toggleEarLevelBtn.textContent = isPerceptualEarLevelVisible ? 'Ear Level: On' : 'Ear Level: Off';
+  toggleEarLevelBtn.classList.toggle('is-active', isPerceptualEarLevelVisible);
+  toggleEarLevelBtn.setAttribute('aria-pressed', isPerceptualEarLevelVisible ? 'true' : 'false');
+}
+
+function updateModelControlVisibility() {
+  const showClassic = activeModel === MODEL_A;
+  for (let i = 0; i < modelAControls.length; i += 1) {
+    modelAControls[i].classList.toggle('is-hidden', !showClassic);
+  }
+  for (let i = 0; i < modelBControls.length; i += 1) {
+    modelBControls[i].classList.toggle('is-hidden', showClassic);
+  }
+}
+
+function updateBandModeAvailability() {
+  const perceptualRestricted = activeModel === MODEL_B;
+  for (let i = 0; i < bandModeButtons.length; i += 1) {
+    const button = bandModeButtons[i];
+    const bandCount = Number(button.dataset.bandCount);
+    const shouldDisable = perceptualRestricted && bandCount > MAX_PERCEPTUAL_BAND_MODE;
+    button.disabled = shouldDisable;
+    button.classList.toggle('band-mode-btn--disabled', shouldDisable);
+    if (shouldDisable) {
+      button.setAttribute('title', 'Model B currently supports up to 25 bands.');
+    } else {
+      button.removeAttribute('title');
+    }
+  }
+}
+
+function setActiveModel(nextModel) {
+  if (nextModel !== MODEL_A && nextModel !== MODEL_B) return;
+  if (activeModel === nextModel) return;
+
+  activeModel = nextModel;
+  if (activeModel === MODEL_B && activeBandMode > MAX_PERCEPTUAL_BAND_MODE) {
+    setBandMode(MAX_PERCEPTUAL_BAND_MODE);
+  }
+  updateModelToggleState();
+  updateModelControlVisibility();
+  updateBandModeAvailability();
+  if (activeModel === MODEL_A && isAutoFitHeight && currentFile && autoFitBaseScale <= DIVISION_EPSILON) {
+    analyzeAndAutoFitWaveHeight(currentFile);
+  }
+  drawVisualizer();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1661,16 +2069,24 @@ function updateFrequencyOrganizer() {
 }
 
 function setBandMode(nextMode) {
+  if (activeModel === MODEL_B && nextMode > MAX_PERCEPTUAL_BAND_MODE) return;
   if (!BAND_MODE_KEYS.includes(nextMode) || nextMode === activeBandMode) return;
   activeBandMode = nextMode;
   activeBandProfile = BAND_PROFILES[nextMode];
   invalidateBandRangeCache();
   updateBandModeButtons();
+  updateBandModeAvailability();
   updateFrequencyOrganizer();
   drawVisualizer();
 }
 
 playPauseBtn.addEventListener('click', () => togglePlayPause());
+modelABtn.addEventListener('click', () => {
+  setActiveModel(MODEL_A);
+});
+modelBBtn.addEventListener('click', () => {
+  setActiveModel(MODEL_B);
+});
 togglePanLineBtn.addEventListener('click', () => {
   isPanDisplayLineVisible = !isPanDisplayLineVisible;
   updatePanLineToggleState();
@@ -1697,6 +2113,41 @@ toggleFoOrganizerBtn.addEventListener('click', () => {
 });
 waveHeightAutoFitBtn.addEventListener('click', () => {
   toggleAutoFitHeight();
+});
+perceptualSpeakerBtn.addEventListener('click', () => {
+  perceptualAudioMode = 'speaker';
+  updatePerceptualModeToggleState();
+  drawVisualizer();
+});
+perceptualHeadphonesBtn.addEventListener('click', () => {
+  perceptualAudioMode = 'headphones';
+  updatePerceptualModeToggleState();
+  drawVisualizer();
+});
+perceptualCone18Btn.addEventListener('click', () => {
+  perceptualConeInches = 18;
+  updatePerceptualConeToggleState();
+  drawVisualizer();
+});
+perceptualCone65Btn.addEventListener('click', () => {
+  perceptualConeInches = 6.5;
+  updatePerceptualConeToggleState();
+  drawVisualizer();
+});
+perceptualCone1Btn.addEventListener('click', () => {
+  perceptualConeInches = 1;
+  updatePerceptualConeToggleState();
+  drawVisualizer();
+});
+togglePhonGridBtn.addEventListener('click', () => {
+  isPerceptualPhonGuideVisible = !isPerceptualPhonGuideVisible;
+  updatePerceptualOverlayToggleStates();
+  drawVisualizer();
+});
+toggleEarLevelBtn.addEventListener('click', () => {
+  isPerceptualEarLevelVisible = !isPerceptualEarLevelVisible;
+  updatePerceptualOverlayToggleStates();
+  drawVisualizer();
 });
 for (let i = 0; i < bandModeButtons.length; i += 1) {
   const button = bandModeButtons[i];
@@ -1797,6 +2248,10 @@ makeSliderPair(waveHeightScaleSlider, waveHeightScaleValueEl, 0.25, 10.0, 2);
 makeSliderPair(waveHeightFitScaleSlider, waveHeightFitScaleValueEl, 0.01, 1.0, 2);
 makeSliderPair(analyserSmoothingSlider, analyserSmoothingValueEl, 0, 1.0, 2);
 makeSliderPair(panEdgeFadeSlider, panEdgeFadeValueEl, 0, 1.0, 2);
+makeSliderPair(perceptualDistanceSlider, perceptualDistanceValueEl, 0.3, 5.0, 2);
+makeSliderPair(perceptualAlphaScaleSlider, perceptualAlphaScaleValueEl, 0.2, 2.5, 2);
+makeSliderPair(perceptualAlphaMinSlider, perceptualAlphaMinValueEl, 0, 0.8, 2);
+makeSliderPair(perceptualAlphaMaxSlider, perceptualAlphaMaxValueEl, 0.1, 1.0, 2);
 
 lineAlphaSlider.addEventListener('input', () => {
   lineAlpha = Number(lineAlphaSlider.value);
@@ -1812,6 +2267,66 @@ lineThicknessSlider.addEventListener('input', () => {
 
 lineThicknessValueEl.addEventListener('change', () => {
   lineThicknessControl = Math.max(0.01, Number(lineThicknessSlider.value));
+});
+
+function syncPerceptualAlphaBounds() {
+  if (perceptualAlphaMin > perceptualAlphaMax) {
+    perceptualAlphaMax = perceptualAlphaMin;
+    perceptualAlphaMaxSlider.value = perceptualAlphaMax.toFixed(2);
+    perceptualAlphaMaxValueEl.value = perceptualAlphaMax.toFixed(2);
+  }
+}
+
+perceptualDistanceSlider.addEventListener('input', () => {
+  perceptualDistanceM = Number(perceptualDistanceSlider.value);
+  drawVisualizer();
+});
+
+perceptualDistanceValueEl.addEventListener('change', () => {
+  perceptualDistanceM = Number(perceptualDistanceSlider.value);
+  drawVisualizer();
+});
+
+perceptualAlphaScaleSlider.addEventListener('input', () => {
+  perceptualAlphaScale = Number(perceptualAlphaScaleSlider.value);
+  drawVisualizer();
+});
+
+perceptualAlphaScaleValueEl.addEventListener('change', () => {
+  perceptualAlphaScale = Number(perceptualAlphaScaleSlider.value);
+  drawVisualizer();
+});
+
+perceptualAlphaMinSlider.addEventListener('input', () => {
+  perceptualAlphaMin = Number(perceptualAlphaMinSlider.value);
+  syncPerceptualAlphaBounds();
+  drawVisualizer();
+});
+
+perceptualAlphaMinValueEl.addEventListener('change', () => {
+  perceptualAlphaMin = Number(perceptualAlphaMinSlider.value);
+  syncPerceptualAlphaBounds();
+  drawVisualizer();
+});
+
+perceptualAlphaMaxSlider.addEventListener('input', () => {
+  perceptualAlphaMax = Number(perceptualAlphaMaxSlider.value);
+  if (perceptualAlphaMax < perceptualAlphaMin) {
+    perceptualAlphaMin = perceptualAlphaMax;
+    perceptualAlphaMinSlider.value = perceptualAlphaMin.toFixed(2);
+    perceptualAlphaMinValueEl.value = perceptualAlphaMin.toFixed(2);
+  }
+  drawVisualizer();
+});
+
+perceptualAlphaMaxValueEl.addEventListener('change', () => {
+  perceptualAlphaMax = Number(perceptualAlphaMaxSlider.value);
+  if (perceptualAlphaMax < perceptualAlphaMin) {
+    perceptualAlphaMin = perceptualAlphaMax;
+    perceptualAlphaMinSlider.value = perceptualAlphaMin.toFixed(2);
+    perceptualAlphaMinValueEl.value = perceptualAlphaMin.toFixed(2);
+  }
+  drawVisualizer();
 });
 
 panFlexWidth = panFlexPercentToWidth(Number(panFlexSlider.value));
@@ -1962,9 +2477,15 @@ window.addEventListener('resize', () => {
 
 updatePanLineToggleState();
 updateDbLineToggleState();
+updateModelToggleState();
+updatePerceptualModeToggleState();
+updatePerceptualConeToggleState();
+updatePerceptualOverlayToggleStates();
+updateModelControlVisibility();
 updateFrequencyOrganizerToggleState();
 updateWaveHeightAutoFitToggleState();
 updateBandModeButtons();
+updateBandModeAvailability();
 updateFrequencyOrganizer();
 resizeCanvas();
 drawVisualizer();
@@ -1981,7 +2502,7 @@ drawVisualizer();
     audio.pause();
     playPauseBtn.disabled = false;
     playPauseBtn.textContent = 'Play';
-    if (isAutoFitHeight) analyzeAndAutoFitWaveHeight(file);
+    if (isAutoFitHeight && activeModel === MODEL_A) analyzeAndAutoFitWaveHeight(file);
   } else {
     currentFile = undefined;
     fileInput.value = '';

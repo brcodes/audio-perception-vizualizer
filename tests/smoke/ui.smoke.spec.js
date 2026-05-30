@@ -48,6 +48,53 @@ test('toggle buttons update pressed state and labels', async ({ page }) => {
     expect(after).not.toBe(before);
 });
 
+test('model switch shows perceptual controls and limits high band counts', async ({ page }) => {
+    await page.goto('/');
+
+    const modelABtn = page.locator('#modelABtn');
+    const modelBBtn = page.locator('#modelBBtn');
+
+    await expect(modelABtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(modelBBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#toggleDbLineBtn')).toBeVisible();
+    await expect(page.locator('#perceptualSpeakerBtn')).toBeHidden();
+
+    await modelBBtn.click();
+
+    await expect(modelABtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(modelBBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toggleDbLineBtn')).toBeHidden();
+    await expect(page.locator('#perceptualSpeakerBtn')).toBeVisible();
+    await expect(page.locator('#perceptualDistanceSlider')).toBeVisible();
+    await expect(page.locator('#bands49Btn')).toBeDisabled();
+    await expect(page.locator('#bands77Btn')).toBeDisabled();
+    await expect(page.locator('#bands99Btn')).toBeDisabled();
+    await expect(page.locator('#bands25Btn')).toBeEnabled();
+
+    await modelABtn.click();
+    await expect(page.locator('#toggleDbLineBtn')).toBeVisible();
+    await expect(page.locator('#perceptualSpeakerBtn')).toBeHidden();
+    await expect(page.locator('#bands49Btn')).toBeEnabled();
+});
+
+test('perceptual mode toggles update labels and pressed state', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#modelBBtn').click();
+
+    const phonGuideBtn = page.locator('#togglePhonGridBtn');
+    const earLevelBtn = page.locator('#toggleEarLevelBtn');
+
+    await expect(phonGuideBtn).toContainText('Phon Guide: Off');
+    await phonGuideBtn.click();
+    await expect(phonGuideBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(phonGuideBtn).toContainText('Phon Guide: On');
+
+    await expect(earLevelBtn).toContainText('Ear Level: On');
+    await earLevelBtn.click();
+    await expect(earLevelBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(earLevelBtn).toContainText('Ear Level: Off');
+});
+
 test('slider, numeric input, and nudge controls stay in sync', async ({ page }) => {
     await page.goto('/');
 

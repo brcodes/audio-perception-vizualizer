@@ -87,10 +87,36 @@ body {
   gap: 0.3rem;
 }
 
+.model-row,
+.mode-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.model-btn {
+  min-width: 7.2rem;
+}
+
+.mode-btn {
+  min-width: 5.8rem;
+}
+
+.controls .is-hidden {
+  display: none;
+}
+
 .band-mode-btn {
   min-width: 2.35rem;
   padding: 0.35rem 0.45rem;
   text-align: center;
+}
+
+.band-mode-btn.band-mode-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #2f3944;
+  color: #60717f;
 }
 
 .seekbar {

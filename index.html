@@ -15,10 +15,18 @@
       <label for="fileInput">Browse</label>
       <input id="fileInput" type="file" accept=".mp3,audio/mpeg" aria-label="Browse MP3" />
       <button id="playPauseBtn" type="button" disabled>Play</button>
-      <button id="togglePanLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle pan display line">Pan
+      <span class="ctrl-label">Model</span>
+      <span class="model-row" role="group" aria-label="Visualizer model">
+        <button id="modelABtn" type="button" class="toggle-btn model-btn is-active"
+          aria-label="Use classic visualizer model" aria-pressed="true">A: Classic</button>
+        <button id="modelBBtn" type="button" class="toggle-btn model-btn" aria-label="Use perceptual visualizer model"
+          aria-pressed="false">B: Perceptual</button>
+      </span>
+      <button id="togglePanLineBtn" type="button" class="toggle-btn is-active model-a-control"
+        aria-label="Toggle pan display line">Pan
         Line: On</button>
-      <button id="toggleDbLineBtn" type="button" class="toggle-btn is-active" aria-label="Toggle dB display line"
-        aria-pressed="true">Db Line: On</button>
+      <button id="toggleDbLineBtn" type="button" class="toggle-btn is-active model-a-control"
+        aria-label="Toggle dB display line" aria-pressed="true">Db Line: On</button>
       <span class="ctrl-label">Bands</span>
       <span class="bands-row" role="group" aria-label="Visualizer band count">
         <button id="bands7Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="7"
@@ -34,8 +42,8 @@
         <button id="bands99Btn" type="button" class="toggle-btn band-mode-btn" data-band-count="99"
           aria-label="Use ninety nine frequency bands" aria-pressed="false">99</button>
       </span>
-      <label for="lineThicknessSlider" class="ctrl-label">Line Thickness</label>
-      <span class="slider-row">
+      <label for="lineThicknessSlider" class="ctrl-label model-a-control">Line Thickness</label>
+      <span class="slider-row model-a-control">
         <button class="nudge-btn" data-target="lineThicknessSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease line thickness">−</button>
         <input id="lineThicknessSlider" type="range" min="0.01" max="1.0" value="0.29" step="0.01" class="ctrl-slider"
@@ -44,9 +52,9 @@
           aria-label="Increase line thickness">+</button>
       </span>
       <input id="lineThicknessValue" type="number" min="0.01" max="1.0" step="0.01" value="0.29"
-        class="ctrl-value-input" aria-label="Line thickness value" />
-      <label for="lineAlphaSlider" class="ctrl-label">Line Opacity</label>
-      <span class="slider-row">
+        class="ctrl-value-input model-a-control" aria-label="Line thickness value" />
+      <label for="lineAlphaSlider" class="ctrl-label model-a-control">Line Opacity</label>
+      <span class="slider-row model-a-control">
         <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease line opacity">−</button>
         <input id="lineAlphaSlider" type="range" min="0" max="1" value="0.55" step="0.01" class="ctrl-slider"
@@ -54,8 +62,8 @@
         <button class="nudge-btn" data-target="lineAlphaSlider" data-dir="1" tabindex="-1"
           aria-label="Increase line opacity">+</button>
       </span>
-      <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="0.55" class="ctrl-value-input"
-        aria-label="Line opacity value" />
+      <input id="lineAlphaValue" type="number" min="0" max="1" step="0.01" value="0.55"
+        class="ctrl-value-input model-a-control" aria-label="Line opacity value" />
       <label for="analyserSmoothingSlider" class="ctrl-label">Render Speed</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="analyserSmoothingSlider" data-dir="-1" tabindex="-1"
@@ -67,11 +75,12 @@
       </span>
       <input id="analyserSmoothingValue" type="number" min="0" max="1.00" step="0.01" value="0.20"
         class="ctrl-value-input" aria-label="Render speed value" />
-      <button id="waveHeightAutoFitBtn" type="button" class="toggle-btn" aria-label="Toggle fit wave height"
-        aria-pressed="true">Fit Wave Height: On</button>
-      <label id="waveHeightFitScaleLabel" for="waveHeightFitScaleSlider" class="ctrl-label">Wave Height Scale
+      <button id="waveHeightAutoFitBtn" type="button" class="toggle-btn model-a-control"
+        aria-label="Toggle fit wave height" aria-pressed="true">Fit Wave Height: On</button>
+      <label id="waveHeightFitScaleLabel" for="waveHeightFitScaleSlider" class="ctrl-label model-a-control">Wave Height
+        Scale
         (Fit)</label>
-      <span class="slider-row">
+      <span class="slider-row model-a-control">
         <button class="nudge-btn" data-target="waveHeightFitScaleSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease wave height fit scale">−</button>
         <input id="waveHeightFitScaleSlider" type="range" min="0.01" max="1.00" value="1.00" step="0.01"
@@ -80,9 +89,10 @@
           aria-label="Increase wave height fit scale">+</button>
       </span>
       <input id="waveHeightFitScaleValue" type="number" min="0.01" max="1.00" step="0.01" value="1.00"
-        class="ctrl-value-input" aria-label="Wave height scale (fit) value" />
-      <label id="waveHeightScaleLabel" for="waveHeightScaleSlider" class="ctrl-label">Wave Height Scale (No Fit)</label>
-      <span class="slider-row">
+        class="ctrl-value-input model-a-control" aria-label="Wave height scale (fit) value" />
+      <label id="waveHeightScaleLabel" for="waveHeightScaleSlider" class="ctrl-label model-a-control">Wave Height Scale
+        (No Fit)</label>
+      <span class="slider-row model-a-control">
         <button class="nudge-btn" data-target="waveHeightScaleSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease wave height scale">−</button>
         <input id="waveHeightScaleSlider" type="range" min="0.25" max="10.00" value="1.35" step="0.05"
@@ -91,7 +101,7 @@
           aria-label="Increase wave height scale">+</button>
       </span>
       <input id="waveHeightScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="1.35"
-        class="ctrl-value-input" aria-label="Wave height scale (no fit) value" />
+        class="ctrl-value-input model-a-control" aria-label="Wave height scale (no fit) value" />
       <label for="panFlexSlider" class="ctrl-label">Pan Exaggeration</label>
       <span class="slider-row">
         <button class="nudge-btn" data-target="panFlexSlider" data-dir="-1" tabindex="-1"
@@ -117,8 +127,72 @@
       </span>
       <input id="panLockValue" type="number" min="0.00" max="1.00" step="0.01" value="0.00" class="ctrl-value-input"
         aria-label="Pan lock value" />
-      <label for="waveWidthScaleSlider" class="ctrl-label">Wave Width Scale</label>
-      <span class="slider-row">
+      <span class="ctrl-label model-b-control is-hidden">Playback Mode</span>
+      <span class="mode-row model-b-control is-hidden" role="group" aria-label="Perceptual playback mode">
+        <button id="perceptualSpeakerBtn" type="button" class="toggle-btn mode-btn is-active"
+          aria-label="Use speaker mode" aria-pressed="true">Speaker</button>
+        <button id="perceptualHeadphonesBtn" type="button" class="toggle-btn mode-btn" aria-label="Use headphones mode"
+          aria-pressed="false">Headphones</button>
+      </span>
+      <span class="ctrl-label model-b-control is-hidden">Cone</span>
+      <span class="mode-row model-b-control is-hidden" role="group" aria-label="Perceptual speaker cone size">
+        <button id="perceptualCone18Btn" type="button" class="toggle-btn mode-btn"
+          aria-label="Use eighteen inch sub cone" aria-pressed="false">18in sub</button>
+        <button id="perceptualCone65Btn" type="button" class="toggle-btn mode-btn is-active"
+          aria-label="Use six point five inch mid cone" aria-pressed="true">6.5in mid</button>
+        <button id="perceptualCone1Btn" type="button" class="toggle-btn mode-btn" aria-label="Use one inch tweeter cone"
+          aria-pressed="false">1in tweet</button>
+      </span>
+      <label for="perceptualDistanceSlider" class="ctrl-label model-b-control is-hidden">Distance (m)</label>
+      <span class="slider-row model-b-control is-hidden">
+        <button class="nudge-btn" data-target="perceptualDistanceSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease listening distance">−</button>
+        <input id="perceptualDistanceSlider" type="range" min="0.30" max="5.00" value="1.50" step="0.10"
+          class="ctrl-slider" aria-label="Perceptual listening distance in meters" />
+        <button class="nudge-btn" data-target="perceptualDistanceSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase listening distance">+</button>
+      </span>
+      <input id="perceptualDistanceValue" type="number" min="0.30" max="5.00" step="0.10" value="1.50"
+        class="ctrl-value-input model-b-control is-hidden" aria-label="Perceptual distance value" />
+      <label for="perceptualAlphaScaleSlider" class="ctrl-label model-b-control is-hidden">Blob Alpha Scale</label>
+      <span class="slider-row model-b-control is-hidden">
+        <button class="nudge-btn" data-target="perceptualAlphaScaleSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease blob alpha scale">−</button>
+        <input id="perceptualAlphaScaleSlider" type="range" min="0.20" max="2.50" value="1.00" step="0.01"
+          class="ctrl-slider" aria-label="Blob alpha scale" />
+        <button class="nudge-btn" data-target="perceptualAlphaScaleSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase blob alpha scale">+</button>
+      </span>
+      <input id="perceptualAlphaScaleValue" type="number" min="0.20" max="2.50" step="0.01" value="1.00"
+        class="ctrl-value-input model-b-control is-hidden" aria-label="Blob alpha scale value" />
+      <label for="perceptualAlphaMinSlider" class="ctrl-label model-b-control is-hidden">Blob Alpha Min</label>
+      <span class="slider-row model-b-control is-hidden">
+        <button class="nudge-btn" data-target="perceptualAlphaMinSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease blob alpha minimum">−</button>
+        <input id="perceptualAlphaMinSlider" type="range" min="0.00" max="0.80" value="0.05" step="0.01"
+          class="ctrl-slider" aria-label="Blob alpha minimum" />
+        <button class="nudge-btn" data-target="perceptualAlphaMinSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase blob alpha minimum">+</button>
+      </span>
+      <input id="perceptualAlphaMinValue" type="number" min="0.00" max="0.80" step="0.01" value="0.05"
+        class="ctrl-value-input model-b-control is-hidden" aria-label="Blob alpha minimum value" />
+      <label for="perceptualAlphaMaxSlider" class="ctrl-label model-b-control is-hidden">Blob Alpha Max</label>
+      <span class="slider-row model-b-control is-hidden">
+        <button class="nudge-btn" data-target="perceptualAlphaMaxSlider" data-dir="-1" tabindex="-1"
+          aria-label="Decrease blob alpha maximum">−</button>
+        <input id="perceptualAlphaMaxSlider" type="range" min="0.10" max="1.00" value="0.88" step="0.01"
+          class="ctrl-slider" aria-label="Blob alpha maximum" />
+        <button class="nudge-btn" data-target="perceptualAlphaMaxSlider" data-dir="1" tabindex="-1"
+          aria-label="Increase blob alpha maximum">+</button>
+      </span>
+      <input id="perceptualAlphaMaxValue" type="number" min="0.10" max="1.00" step="0.01" value="0.88"
+        class="ctrl-value-input model-b-control is-hidden" aria-label="Blob alpha maximum value" />
+      <button id="togglePhonGridBtn" type="button" class="toggle-btn model-b-control is-hidden"
+        aria-label="Toggle perceptual phon guide" aria-pressed="false">Phon Guide: Off</button>
+      <button id="toggleEarLevelBtn" type="button" class="toggle-btn model-b-control is-hidden is-active"
+        aria-label="Toggle perceptual ear level line" aria-pressed="true">Ear Level: On</button>
+      <label for="waveWidthScaleSlider" class="ctrl-label model-a-control">Wave Width Scale</label>
+      <span class="slider-row model-a-control">
         <button class="nudge-btn" data-target="waveWidthScaleSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease wave width scale">−</button>
         <input id="waveWidthScaleSlider" type="range" min="0.25" max="10.00" value="2.50" step="0.05"
@@ -127,9 +201,9 @@
           aria-label="Increase wave width scale">+</button>
       </span>
       <input id="waveWidthScaleValue" type="number" min="0.25" max="10.00" step="0.05" value="2.50"
-        class="ctrl-value-input" aria-label="Wave width scale value" />
-      <label for="widthBoostSlider" class="ctrl-label">Wave Width Boost (when Loud)</label>
-      <span class="slider-row">
+        class="ctrl-value-input model-a-control" aria-label="Wave width scale value" />
+      <label for="widthBoostSlider" class="ctrl-label model-a-control">Wave Width Boost (when Loud)</label>
+      <span class="slider-row model-a-control">
         <button class="nudge-btn" data-target="widthBoostSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease wave width boost when loud">−</button>
         <input id="widthBoostSlider" type="range" min="0.00" max="1.00" value="0.88" step="0.01" class="ctrl-slider"
@@ -137,12 +211,12 @@
         <button class="nudge-btn" data-target="widthBoostSlider" data-dir="1" tabindex="-1"
           aria-label="Increase wave width boost when loud">+</button>
       </span>
-      <input id="widthBoostValue" type="number" min="0.00" max="1.00" step="0.01" value="0.88" class="ctrl-value-input"
-        aria-label="Wave width boost when loud value" />
-      <button id="binauralPanBtn" type="button" class="toggle-btn" aria-label="Toggle binaural pan display"
-        aria-pressed="false">Wave Width Boost (when Panned): None</button>
-      <label for="panEdgeFadeSlider" class="ctrl-label">Line Truncation (Past Pan Edge)</label>
-      <span class="slider-row">
+      <input id="widthBoostValue" type="number" min="0.00" max="1.00" step="0.01" value="0.88"
+        class="ctrl-value-input model-a-control" aria-label="Wave width boost when loud value" />
+      <button id="binauralPanBtn" type="button" class="toggle-btn model-a-control"
+        aria-label="Toggle binaural pan display" aria-pressed="false">Wave Width Boost (when Panned): None</button>
+      <label for="panEdgeFadeSlider" class="ctrl-label model-a-control">Line Truncation (Past Pan Edge)</label>
+      <span class="slider-row model-a-control">
         <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="-1" tabindex="-1"
           aria-label="Decrease line truncation (past pan edge)">−</button>
         <input id="panEdgeFadeSlider" type="range" min="0" max="1" value="0.61" step="0.01" class="ctrl-slider"
@@ -150,8 +224,8 @@
         <button class="nudge-btn" data-target="panEdgeFadeSlider" data-dir="1" tabindex="-1"
           aria-label="Increase line truncation (past pan edge)">+</button>
       </span>
-      <input id="panEdgeFadeValue" type="number" min="0" max="1" step="0.01" value="0.61" class="ctrl-value-input"
-        aria-label="Line truncation (past pan edge) value" />
+      <input id="panEdgeFadeValue" type="number" min="0" max="1" step="0.01" value="0.61"
+        class="ctrl-value-input model-a-control" aria-label="Line truncation (past pan edge) value" />
     </section>
     <section class="seekbar">
       <span id="currentTime">0:00</span>

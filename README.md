@@ -1,3 +1,7 @@
+## Audio Perception Visualizer
+
+Audio visualizer whose properties aim to serve as an analogy to the scientific principles of human audio perception. 'See' your sound for engineering purposes, or pleasure.
+
 ## Default Mode
 
 - Log-frequency (constant-Q) band spacing across the 20 Hz to 20 kHz audible range preserves proportional octave resolution.

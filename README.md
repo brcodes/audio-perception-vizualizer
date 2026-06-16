@@ -1,38 +1,20 @@
-# audio-perception-visualizer
+## Default Mode
 
-The Audio Perception Visualizer is a static JavaScript web app for MP3-driven 2D circular visualization focused on mixing use-cases.
+- Log-frequency (constant-Q) band spacing across the 20 Hz to 20 kHz audible range preserves proportional octave resolution.
+- Geometric-mean band centers and logarithmic interpolation map frequency perception more closely than linear-Hz spacing.
+- FFT window integration plus configurable IIR smoothing model temporal persistence in short-time spectral analysis.
+- Stereo lateralization is estimated from interaural level difference using normalized channel-energy contrast: pan = (R - L) / (R + L + epsilon).
+- A center deadband suppresses micro-jitter near equal-channel energy to stabilize front-center localization.
+- Pan-lock interpolation provides temporal hysteresis, reflecting perceived source continuity over frame-to-frame fluctuation.
+- Band-energy to vertical excursion uses calibrated nonlinear scaling so typical program material remains readable while transient peaks retain headroom.
+- Dynamic-range mapping is anchored to analyser dB limits, preserving low-level visibility without flattening high-level transients.
+- Edge masking past the pan boundary applies graded opacity falloff to model reduced perceptual salience outside the intended lateral field.
+- Quantized pan points and bounded geometry enforce deterministic, repeatable measurement states for comparative listening workflows.
 
-## Run locally
+## Blob Mode
 
-This project is static and Cloudflare Pages ready.
-
-- Open `index.html` directly, or
-- Serve the folder (example):
-
-```bash
-cd <project-directory>
-python3 -m http.server 4173
-```
-
-Then open `http://localhost:4173`.
-
-## Mapping model implemented
-
-- **7 frequency bins / fixed geometric means / colors / alphas** exactly as specified.
-- **North/South split** on an invisible center cut:
-  - Top semicircle: 1000, 2828.4, 4898.9, 10954.5 Hz
-  - Bottom semicircle: 1000, 353.6, 122.5, 34.6 Hz
-- **Z-order** rendered exactly per requirement (back to front).
-- **Height ↔ amplitude**:
-  - Piecewise map: typical energy (`~0.45`) reaches ~70% of semicircle radius.
-  - Peaks can reach ~97%.
-- **Horizontal center ↔ pan**:
-  - Stereo pan proxy per bin is computed from left/right analyser energies:
-    - `pan = (R - L) / (R + L + epsilon)`
-  - Quantized to **201 discrete pan points** (`-100..100`).
-- **Width extents ↔ frequency (plus slight loudness expansion)**:
-  - Low frequencies are wider (“blobbier”), highs narrower (“spikier”) using a log-frequency width curve.
-  - Width gets slight boost with level so louder content feels broader.
-  - Total horizontal occupancy is clamped to fit inside the circle and constrained to:
-    - Typical region around <=70% of diameter.
-    - Max transient region around ~97% of diameter.
+- Frequency-to-width mapping follows inverse-period behavior (1/f), with compression to keep low-frequency dominance perceptually meaningful but visually bounded.
+- Loudness-coupled blob spread uses a Stevens-style power law (amplitude^0.67) to approximate nonlinear human loudness growth.
+- Binaural spread augmentation uses a cosine-derived apparent-source-width model based on reduced interaural correlation at larger lateral angles.
+- Frequency-category grouping (sub-bass through brilliance) reflects standard psychoacoustic/engineering pitch regions for mix analysis.
+- Blob geometry remains bounded to preserve repeatable comparison states while still representing transient expansion and contraction.

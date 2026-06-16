@@ -14,7 +14,7 @@ async function setRangeValue(page, selector, value) {
 test('initial UI defaults and critical controls render', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.getByRole('heading', { name: 'Music Mix Mapper' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Audio Perception Visualizer' })).toBeVisible();
     await expect(page.locator('#playPauseBtn')).toBeDisabled();
     await expect(page.locator('#togglePanLineBtn')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#toggleDbLineBtn')).toHaveAttribute('aria-pressed', 'true');

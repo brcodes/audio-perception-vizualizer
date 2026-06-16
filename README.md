@@ -1,6 +1,6 @@
-# music-mix-mapper
+# audio-perception-visualizer
 
-The Music Mix Mapper is a static JavaScript web app for MP3-driven 2D circular visualization focused on mixing use-cases.
+The Audio Perception Visualizer is a static JavaScript web app for MP3-driven 2D circular visualization focused on mixing use-cases.
 
 ## Run locally
 

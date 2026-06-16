@@ -1,9 +1,9 @@
 ---
-description: "Use when editing, extending, or debugging music-mix-mapper (app.js, styles.css, index.html). Defines one explicit visualizer-purpose requirement plus supporting code quality, performance, and security rules for this Web Audio API app."
+description: "Use when editing, extending, or debugging audio-perception-visualizer (app.js, styles.css, index.html). Defines one explicit visualizer-purpose requirement plus supporting code quality, performance, and security rules for this Web Audio API app."
 applyTo: "*.js,*.css,*.html"
 ---
 
-# Music Mix Mapper — Coding Instructions
+# Audio Perception Visualizer — Coding Instructions
 
 ## 1. Visualizer Purpose/Design Requirement (Only Explicit Requirement)
 

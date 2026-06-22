@@ -1013,7 +1013,7 @@ function isMp3File(file) {
 }
 
 function updateSelectedFileText(file) {
-  selectedFileText.textContent = file ? file.name : 'No mp3 selected';
+  selectedFileText.textContent = file ? file.name : '';
 }
 
 fileInput.addEventListener('change', async (event) => {

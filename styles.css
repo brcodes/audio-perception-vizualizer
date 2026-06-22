@@ -589,10 +589,6 @@ body {
   white-space: nowrap;
 }
 
-.file-selected-text {
-  min-width: 11ch;
-}
-
 .ctrl-label--locked {
   opacity: 0.28;
   color: #4a5a68;

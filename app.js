@@ -1,7 +1,6 @@
 const canvas = document.getElementById('vizCanvas');
 const vizStage = document.getElementById('vizStage');
 const fileInput = document.getElementById('fileInput');
-const selectedFileText = document.getElementById('selectedFileText');
 const playPauseBtn = document.getElementById('playPauseBtn');
 const seekSlider = document.getElementById('seekSlider');
 const currentTimeEl = document.getElementById('currentTime');
@@ -120,7 +119,7 @@ const DB_VERT_BLEED_PX = 8;
 const MIN_AUDIBLE_HZ = 20;
 const MAX_AUDIBLE_HZ = 20000;
 const BAND_MODE_KEYS = Object.freeze([7, 15, 25, 49, 77, 99]);
-const DEFAULT_BAND_MODE = 49;
+const DEFAULT_BAND_MODE = 25;
 const COMPACT_ORGANIZER_MAX_BANDS = 25;
 const FO_TOOLTIP_OFFSET_X = 14;
 const FO_TOOLTIP_OFFSET_Y = 18;
@@ -1012,25 +1011,18 @@ function isMp3File(file) {
   return MP3_MIME_TYPES.has(type) || file.name.toLowerCase().endsWith('.mp3');
 }
 
-function updateSelectedFileText(file) {
-  selectedFileText.textContent = file ? file.name : '';
-}
-
 fileInput.addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) {
-    updateSelectedFileText();
     return;
   }
   if (!isMp3File(file)) {
     window.alert('Please upload an MP3 file.');
     fileInput.value = '';
-    updateSelectedFileText();
     return;
   }
 
   currentFile = file;
-  updateSelectedFileText(file);
   analysisGeneration += 1;
   ensureAudioGraph();
   if (audioContext.state === 'suspended') await audioContext.resume();
@@ -1983,7 +1975,6 @@ drawVisualizer();
   const file = fileInput.files?.[0];
   if (file && isMp3File(file)) {
     currentFile = file;
-    updateSelectedFileText(file);
     ensureAudioGraph();
     revokeObjectUrlIfNeeded();
     objectUrl = URL.createObjectURL(file);
@@ -1996,7 +1987,6 @@ drawVisualizer();
   } else {
     currentFile = undefined;
     fileInput.value = '';
-    updateSelectedFileText();
   }
 }());
 

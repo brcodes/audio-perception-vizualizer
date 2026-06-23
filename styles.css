@@ -44,6 +44,12 @@ body {
   margin-right: 0.5rem;
 }
 
+.copyright {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 200;
+}
+
 .controls input,
 .controls button {
   border-radius: 0.45rem;
